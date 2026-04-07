@@ -1,0 +1,95 @@
+{
+  "name": "vibe-coding-assistant",
+  "displayName": "Vibe Coding Assistant",
+  "description": "AI coding assistant with file editing tools",
+  "version": "0.0.1",
+  "publisher": "local-dev",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:vibeCodingChat"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibe-coding",
+          "title": "Vibe Coding",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "vibe-coding": [
+        {
+          "id": "vibeCodingChat",
+          "name": "Chat",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "vibe-coding.openChat",
+        "title": "Open Vibe Coding Chat"
+      },
+      {
+        "command": "vibe-coding.clearHistory",
+        "title": "Clear Chat History"
+      }
+    ],
+    "configuration": {
+      "title": "Vibe Coding Assistant",
+      "properties": {
+        "vibe-coding.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.deepseek.com",
+          "description": "Base URL for OpenAI-compatible API"
+        },
+        "vibe-coding.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API Key"
+        },
+        "vibe-coding.model": {
+          "type": "string",
+          "default": "deepseek-reasoner",
+          "description": "Model name"
+        },
+        "vibe-coding.confirmChanges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to ask for confirmation before applying file changes"
+        },
+        "vibe-coding.maxInteractions": {
+          "type": "number",
+          "default": -1,
+          "description": "Maximum number of tool call iterations (-1 means unlimited)"
+        },
+        "vibe-coding.maxSequenceLength": {
+          "type": "number",
+          "default": 1000000,
+          "description": "Maximum length for generated text sequences"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "18.x",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}
