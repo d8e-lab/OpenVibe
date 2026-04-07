@@ -238,7 +238,7 @@ edit(filePath, startLine, endLine, newContent)
 4. **Install into VS Code**:
    - Press `F1` to open the command palette
    - Type `Extensions: Install from VSIX`
-   - Select `openvibe/vibe-coding-assistant-0.0.1.vsix`
+   - Select `openvibe/vibe-coding-assistant-0.1.0.vsix`
 
 <h2 id="configuration">⚙️ 配置 / Configuration</h2>
 
