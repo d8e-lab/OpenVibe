@@ -1,5 +1,5 @@
 ![OpenVibe Logo](imgs/logo.png)
-# 🚀 OpenVibe — VS Code AI 编程助手 / AI Coding Assistant for VS Code
+# 🚀 OpenVibe — 极简AI编程助手 / Minimalist AI Assistant
 > **基于三大核心工具的智能项目编辑助手 / An intelligent project editing assistant built on three core tools**
 
 <h2 id="important-notice">⚠️ 重要提示 / Important Notice</h2>
