@@ -44,7 +44,19 @@ tmp/
 
 # Project specific ignores
 test-memory/
-imgs/  # 如果有需要可以保留，目前README引用logo.png在imgs目录下
+test/
 
-# 注意：如果需要保留logo.png，则imgs/目录不应忽略
-# 但是logo.png应该放在media/目录下，目前imgs/目录可能是开发时的临时目录
+# Local runtime data (session history, memory)
+.OpenVibe/
+
+# Local tool configs
+.claude/
+
+# Promotion / personal notes
+PROMOTION.md
+
+# Duplicate logo in root (the one in imgs/ is used by README)
+logo.png
+
+# Development test scripts
+webview_script_test.js
