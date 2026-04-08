@@ -310,27 +310,19 @@ OpenVibe包含一个智能内存系统，用于维护项目知识和任务历史
 
 ### 内存文件结构 / Memory File Structure
 
-内存文件位于 `.OpenVibe/memory.md`，包含以下部分：
+内存文件位于 `.OpenVibe/memory.md`，采用**四层级结构**，顺序固定：
 
-1. **项目概览** - 项目基本信息
-2. **重要文件说明** - 关键文件功能介绍
-3. **技术栈** - 使用的技术和框架
-4. **会话历史摘要** - 重要任务的记录
-5. **待办事项** - 当前的任务列表
-6. **开发笔记** - 技术细节和注意事项
+1. **Level 1 — 项目整体描述** - 项目基本信息、核心设计原则、技术栈、数据流图
+2. **Level 2 — 文件目录结构** - 完整的目录树、关键文件说明、文件间依赖关系
+3. **Level 3 — 类和类型定义** - 每个类的职责、关键字段、生命周期、继承关系
+4. **Level 4 — 函数和方法** - 所有公共函数和重要私有方法的签名、作用、副作用、错误处理
 
-> OpenVibe includes an intelligent memory system for maintaining project knowledge and task history.
+> The memory file is located at `.OpenVibe/memory.md` and follows a **four‑level structure** in fixed order:
 >
-> ### 内存文件结构 / Memory File Structure
->
-> The memory file is located at `.OpenVibe/memory.md` and contains the following sections:
->
-> 1. **Project Overview** – basic project information
-> 2. **Important Files Description** – functionality of key files
-> 3. **Tech Stack** – technologies and frameworks used
-> 4. **Conversation History Summary** – records of important tasks
-> 5. **Todo Items** – current task list
-> 6. **Development Notes** – technical details and considerations
+> 1. **Level 1 — Project Overview** – project basic info, core design principles, tech stack, data‑flow diagram
+> 2. **Level 2 — File Directory Structure** – complete directory tree, key file descriptions, file dependencies
+> 3. **Level 3 — Classes and Type Definitions** – each class's responsibility, key fields, lifecycle, inheritance
+> 4. **Level 4 — Functions and Methods** – signatures, purpose, side effects, error handling for all public functions and important private methods
 
 ### 内存使用原则 / Memory Usage Principles
 

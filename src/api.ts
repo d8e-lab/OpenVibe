@@ -19,7 +19,6 @@ export async function sendChatMessage(
     model: config.model,
     messages,
     temperature: 0.7,
-    max_tokens: 4000,
   };
 
   if (tools && tools.length > 0) {

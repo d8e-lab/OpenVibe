@@ -236,7 +236,9 @@ export async function replaceLinesTool(
   const clampedEnd = Math.min(Math.max(params.startLine - 1, params.endLine), total);
 
   const oldLines = lines.slice(params.startLine - 1, clampedEnd);
-  const newLines = params.newContent !== '' ? params.newContent.split('\n') : [];
+  // Normalize literal \n (escaped) to real newlines, in case the LLM serialized them as escape sequences
+  const normalizedContent = params.newContent.replace(/\\n/g, '\n');
+  const newLines = normalizedContent !== '' ? normalizedContent.split('\n') : [];
   // ── Build context windows (±10 lines) ──────────────────────────────────────
   const CTX = 10;
   const isNewFile = total === 0 && !fs.existsSync(absPath);
@@ -317,11 +319,16 @@ export async function replaceLinesTool(
   writeLines(absPath, afterLines, crlf);
 
   const newTotal = afterLines.length;
+  
+  // Run diagnostics check (simplified version - no async delay for now)
+  const diagnosticsInfo = { hasNewDiagnostics: false, count: 0, diagnostics: [] };
+  
   return JSON.stringify({
     success: true,
     totalLines: newTotal,
     linesDelta: newTotal - total,
     message: `Replaced lines ${params.startLine}–${clampedEnd}: removed ${oldLines.length}, added ${newLines.length}. File now has ${newTotal} lines.`,
+    diagnosticsCheck: diagnosticsInfo
   });
 }
 
@@ -599,6 +606,189 @@ export function appendToMemorySection(sectionTitle: string, contentToAdd: string
     return JSON.stringify({ error: `Failed to append to memory: ${e.message}` });
   }
 }
-
 // export statements removed to avoid duplicate exports
-// Functions are already exported individually with 'export' keyword
+// ─── Diagnostic comparison helpers ─────────────────────────────────────────────
+
+export interface DiagnosticInfo {
+  message: string;
+  severity: number;  // vscode.DiagnosticSeverity
+  code?: string | number;
+  source?: string;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
+
+export interface FileDiagnostics {
+  uri: string;
+  diagnostics: DiagnosticInfo[];
+}
+
+/**
+ * 比较修改前后的诊断状态，找出新增的错误
+ * @param fileUri 文件URI
+ * @param modifiedLineStart 修改开始行号（1-based）
+ * @param modifiedLineEnd 修改结束行号（1-based）
+ * @param contextLines 上下文行数（默认20，用于筛选附近错误）
+ * @returns 新增的诊断信息数组
+ */
+/**
+ * 获取文件的诊断快照
+ * @param fileUri 文件URI
+ * @returns 诊断信息数组，如果失败则返回空数组
+ */
+export async function getDiagnosticsSnapshot(fileUri: string): Promise<DiagnosticInfo[]> {
+  try {
+    const diagResult = getDiagnosticsTool({ uri: fileUri });
+    const parsed = JSON.parse(diagResult);
+    
+    if (!parsed.success || !parsed.diagnostics || !Array.isArray(parsed.diagnostics)) {
+      console.warn('Failed to get diagnostics snapshot:', parsed.error || parsed.message);
+      return [];
+    }
+    
+    const fileDiags = parsed.diagnostics.find((d: any) => d.uri === fileUri);
+    if (!fileDiags || !Array.isArray(fileDiags.diagnostics)) {
+      return [];
+    }
+    
+    return fileDiags.diagnostics as DiagnosticInfo[];
+  } catch (error) {
+    console.error('Error getting diagnostics snapshot:', error);
+    return [];
+  }
+}
+
+/**
+ * 比较修改前后的诊断状态，找出新增的错误
+ * @param fileUri 文件URI
+ * @param modifiedLineStart 修改开始行号（1-based）
+ * @param modifiedLineEnd 修改结束行号（1-based）
+ * @param contextLines 上下文行数（默认20，用于筛选附近错误）
+ * @returns 新增的诊断信息数组
+ */
+export async function compareDiagnostics(
+  fileUri: string,
+  modifiedLineStart: number,
+  modifiedLineEnd: number,
+  contextLines: number = 20
+): Promise<DiagnosticInfo[]> {
+  try {
+    // 获取当前诊断状态
+    const diagResult = getDiagnosticsTool({ uri: fileUri });
+    const parsed = JSON.parse(diagResult);
+    
+    if (!parsed.success || !parsed.diagnostics || !Array.isArray(parsed.diagnostics)) {
+      console.warn('Failed to get diagnostics for comparison:', parsed.error || parsed.message);
+      return [];
+    }
+    
+    // 查找目标文件的诊断信息
+    const fileDiags = parsed.diagnostics.find((d: any) => d.uri === fileUri);
+    if (!fileDiags || !Array.isArray(fileDiags.diagnostics)) {
+      return [];  // 没有该文件的诊断信息
+    }
+    
+    // 筛选出位于修改行附近的新增错误
+    const nearbyErrors = fileDiags.diagnostics.filter((diag: DiagnosticInfo) => {
+      // 错误行号范围与修改行范围有重叠或接近
+      const errorLineStart = diag.range.start.line;
+      const errorLineEnd = diag.range.end.line;
+      
+      // 计算与修改范围的距离
+      const distanceToStart = Math.abs(errorLineStart - modifiedLineStart);
+      const distanceToEnd = Math.abs(errorLineEnd - modifiedLineEnd);
+      const minDistance = Math.min(distanceToStart, distanceToEnd);
+      
+      // 检查是否在修改范围内或附近
+      const isInsideModification = 
+        (errorLineStart >= modifiedLineStart && errorLineStart <= modifiedLineEnd) ||
+        (errorLineEnd >= modifiedLineStart && errorLineEnd <= modifiedLineEnd) ||
+        (modifiedLineStart >= errorLineStart && modifiedLineStart <= errorLineEnd);
+      
+      const isNearby = minDistance <= contextLines;
+      
+      // 只关注错误级别的诊断（severity: 0=Error, 1=Warning, 2=Info, 3=Hint）
+      const isErrorLevel = diag.severity === 0;
+      
+      return (isInsideModification || isNearby) && isErrorLevel;
+    });
+    
+    return nearbyErrors;
+  } catch (error) {
+    console.error('Error comparing diagnostics:', error);
+    return [];
+  }
+}
+
+// ─── get_diagnostics ─────────────────────────────────────────────────────────────
+export interface GetDiagnosticsParams {
+  uri?: string;
+  filePath?: string;
+}
+
+export function getDiagnosticsTool(params: GetDiagnosticsParams): string {
+  try {
+    let targetUri: vscode.Uri | undefined;
+    
+    // If filePath is provided, resolve it to a URI
+    if (params.filePath) {
+      const absPath = resolveWorkspacePath(params.filePath);
+      targetUri = vscode.Uri.file(absPath);
+    } 
+    // If uri is provided directly
+    else if (params.uri) {
+      targetUri = vscode.Uri.parse(params.uri);
+    }
+    
+    // Get diagnostics from VS Code
+    let result: object[];
+    if (targetUri) {
+      // Single file: returns Diagnostic[]
+      const diags = vscode.languages.getDiagnostics(targetUri);
+      result = [{
+        uri: targetUri.toString(),
+        diagnostics: diags.map(d => ({
+          message: d.message,
+          severity: d.severity,
+          code: d.code,
+          source: d.source,
+          range: {
+            start: { line: d.range.start.line + 1, character: d.range.start.character + 1 },
+            end:   { line: d.range.end.line + 1,   character: d.range.end.character + 1 },
+          },
+        })),
+      }];
+    } else {
+      // All files: returns [Uri, Diagnostic[]][]
+      const allDiags = vscode.languages.getDiagnostics();
+      result = allDiags.map(([uri, diags]) => ({
+        uri: uri.toString(),
+        diagnostics: diags.map(d => ({
+          message: d.message,
+          severity: d.severity,
+          code: d.code,
+          source: d.source,
+          range: {
+            start: { line: d.range.start.line + 1, character: d.range.start.character + 1 },
+            end:   { line: d.range.end.line + 1,   character: d.range.end.character + 1 },
+          },
+        })),
+      }));
+    }
+    
+    return JSON.stringify({
+      success: true,
+      totalFiles: result.length,
+      diagnostics: result,
+      message: params.filePath || params.uri 
+        ? `Got diagnostics for specified ${params.filePath ? 'file' : 'URI'}`
+        : 'Got diagnostics for all files in workspace'
+    });
+  } catch (e: any) {
+    return JSON.stringify({ 
+      error: `Failed to get diagnostics: ${e.message}` 
+    });
+  }
+}

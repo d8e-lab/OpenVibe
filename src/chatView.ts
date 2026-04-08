@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { sendChatMessage } from './api';
 import { ChatMessage, ChatSession, ApiConfig } from './types';
 import { TOOL_DEFINITIONS, SYSTEM_PROMPT } from './toolDefinitions';
-import { readFileTool, findInFileTool, replaceLinesTool, getWorkspaceInfoTool, createDirectoryTool } from './tools';
+import { readFileTool, findInFileTool, replaceLinesTool, getWorkspaceInfoTool, createDirectoryTool, getDiagnosticsTool } from './tools';
 import type { ReplaceCheckContext } from './tools';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -216,13 +216,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this._addMessage({ role: 'user', content: text });
     }
     this._post({ type: 'loading', loading: true });
-    try {
-       const apiConfig = this._getApiConfig();
-       let iterations = 0;
-       let memoryUpdateDone = false;
-       const maxIterations = apiConfig.maxInteractions === -1 ? Number.MAX_SAFE_INTEGER : (apiConfig.maxInteractions || MAX_TOOL_ITERATIONS);
-       while (iterations < maxIterations && !this._stopRequested) {
-         iterations++;
+     try {
+         const apiConfig = this._getApiConfig();
+         let iterations = 0;
+         let memoryUpdateDone = false;
+         const maxIterations = apiConfig.maxInteractions === -1 ? Number.MAX_SAFE_INTEGER : (apiConfig.maxInteractions || MAX_TOOL_ITERATIONS);
+         while (iterations < maxIterations && !this._stopRequested) {
+           iterations++;
 
         // Check if user requested stop before each iteration
         if (this._stopRequested) {
@@ -304,25 +304,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
           }
 
+
           // Only exit when the model explicitly signals it is done.
           if (hasCompletionSignal) {
-            if (!memoryUpdateDone) {
-              memoryUpdateDone = true;
-              // Ask the LLM to update memory.md using its existing tools, then signal done again.
-              this._addMessage({
-                role: 'user',
-                content: '请用 read_file 读取 .OpenVibe/memory.md，然后用 edit 工具更新其中的"会话历史摘要"章节，记录本次任务完成的内容。完成后输出 <TASK_COMPLETE>。',
-              });
-            } else {
-              break;
-            }
+            memoryUpdateDone = true;
+            // MODIFIED: Removed automatic memory update prompt for better user experience
+            // Now directly break when task is complete
+            break;
           }
         }
+      if (iterations >= maxIterations) {
+        this._post({ type: 'info', message: `Iteration limit (${maxIterations}) reached. Send an empty message to keep going, or type a new instruction.` });
       }
-      if (iterations >= MAX_TOOL_ITERATIONS) {
-        this._post({ type: 'info', message: `Iteration limit (${MAX_TOOL_ITERATIONS}) reached. Send an empty message to keep going, or type a new instruction.` });
-      }
-    } catch (error: any) {
+     } // end while
+  } // end try
+  catch (error: any) {
       if (error.name === 'AbortError') {
         this._post({ type: 'info', message: 'Operation stopped by user.' });
       } else {
@@ -376,7 +372,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             newContent: args.newContent as string,
           },
           (ctx) => this._llmCheckReplace(ctx),
-          (ctx) => this._userConfirmReplace(ctx)
+          this._getApiConfig().confirmChanges !== false ? (ctx) => this._userConfirmReplace(ctx) : undefined
         );
 
       case 'create_directory':
@@ -464,11 +460,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         return result;
        }
 
-       case 'compact': {
-         return await this._compactHistory();
-       }
+        case 'compact': {
+          return await this._compactHistory();
+        }
 
-       default:
+        case 'get_diagnostics': {
+          return getDiagnosticsTool({
+            uri: args.uri as string | undefined,
+            filePath: args.filePath as string | undefined,
+          });
+        }
+
+        default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
   }
