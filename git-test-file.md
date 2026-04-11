@@ -50,3 +50,4 @@
 - ✅ 等待创建Git快照
 - ✅ 等待测试回滚功能
 test git rollback
+test git rollback
