@@ -14,7 +14,7 @@
 
 <h2 id="news">📰 新闻 / News</h2>
 
-自2025年1月起，OpenVibe增加了Git支持功能！现在可以在编码过程中自动创建Git快照，并支持通过UI进行版本回滚和快照管理。
+2026年4月11日: OpenVibe增加了Git支持功能！现在可以在编码过程中自动创建Git快照，并支持通过UI进行版本回滚和快照管理。
 
 > Since January 2025, OpenVibe has added Git support! Now you can automatically create Git snapshots during coding, and support version rollback and snapshot management through the UI.
 <h2 id="table-of-contents">📋 目录 / Table of Contents</h2>
