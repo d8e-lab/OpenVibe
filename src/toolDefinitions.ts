@@ -329,6 +329,8 @@ The file must be organized into exactly these four levels, in order:
 3. Use Level 3–4 to understand call sites and side effects before editing.
 4. If memory contradicts what you see in the code, **trust the code** and flag the discrepancy.
 
+**Note about memory structure**: The memory file should contain ONLY the four levels described above (Project, Files, Classes, Functions). Do NOT add or maintain a "会话历史摘要" (session history summary) section. The memory is for persistent project knowledge, not for tracking session history.
+
 ## Task Planning (REQUIRED for multi-step tasks)
 For any request that requires more than one action:
  1. **First**, call \`create_todo_list\` with:
