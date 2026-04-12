@@ -613,17 +613,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
          endLine: ctx.endLine,
           verdict: approved ? 'CONFIRMED' : 'REJECTED',
           reason: reason,
-          beforePreview: ctx.beforeContext.split('\
-').slice(0, 5).join('\
-'), // 显示前5行作为预览
-          afterPreview: ctx.afterContext.split('\
-').slice(0, 5).join('\
-'),   // 显示前5行作为预览
           timestamp: Date.now(),
        },
      });
 
-     return approved;
+    return approved;
+   }
 
   // ─── User confirmation dialog for replace ──────────────────────────────────
   private async _userConfirmReplace(ctx: ReplaceCheckContext): Promise<boolean> {
