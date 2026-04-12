@@ -1466,11 +1466,12 @@ ${error.stack}`);
   private _getHtml(): string {
     return `<!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vibe Coding Chat</title>
-<style>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Coding Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -1513,14 +1514,89 @@ ${error.stack}`);
     padding: 0 4px;
   }
 
-  .bubble {
+   .bubble {
     max-width: 90%;
     padding: 8px 12px;
     border-radius: 12px;
     line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
+   .bubble p {
+     margin: 8px 0;
+   }
+   .bubble p:first-child {
+     margin-top: 0;
+   }
+   .bubble p:last-child {
+     margin-bottom: 0;
+   }
+   .bubble code {
+     background-color: var(--vscode-textCodeBlock-background);
+     color: var(--vscode-textPreformat-foreground);
+     padding: 2px 4px;
+     border-radius: 3px;
+     font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+     font-size: 0.9em;
+   }
+   .bubble pre {
+     background-color: var(--vscode-textCodeBlock-background);
+     color: var(--vscode-textPreformat-foreground);
+     padding: 8px 12px;
+     border-radius: 4px;
+     overflow-x: auto;
+     margin: 8px 0;
+     font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
+     font-size: 0.9em;
+   }
+   .bubble pre code {
+     background-color: transparent;
+     padding: 0;
+     border-radius: 0;
+     font-size: 1em;
+   }
+   .bubble ul, .bubble ol {
+     padding-left: 24px;
+     margin: 8px 0;
+   }
+   .bubble li {
+     margin: 4px 0;
+   }
+   .bubble h1, .bubble h2, .bubble h3, .bubble h4, .bubble h5, .bubble h6 {
+     margin: 16px 0 8px 0;
+     font-weight: 600;
+   }
+   .bubble h1 { font-size: 1.5em; }
+   .bubble h2 { font-size: 1.3em; }
+   .bubble h3 { font-size: 1.2em; }
+   .bubble h4 { font-size: 1.1em; }
+   .bubble h5, .bubble h6 { font-size: 1em; }
+   .bubble blockquote {
+     border-left: 3px solid var(--vscode-input-border);
+     margin: 8px 0;
+     padding-left: 12px;
+     color: var(--vscode-descriptionForeground);
+     font-style: italic;
+   }
+   .bubble table {
+     border-collapse: collapse;
+     margin: 8px 0;
+     width: 100%;
+   }
+   .bubble th, .bubble td {
+     border: 1px solid var(--vscode-input-border);
+     padding: 6px 8px;
+     text-align: left;
+   }
+   .bubble th {
+     background-color: var(--vscode-list-hoverBackground);
+     font-weight: 600;
+   }
+   .bubble a {
+     color: var(--vscode-textLink-foreground);
+     text-decoration: none;
+   }
+   .bubble a:hover {
+     text-decoration: underline;
+   }
   .user .bubble {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -1971,25 +2047,51 @@ ${error.stack}`);
   // Pending tool card awaiting its result
   let pendingToolCard = null;
 
-  function addMessage(role, content) {
-    const row = document.createElement('div');
-    row.className = 'message-row ' + role;
+   function addMessage(role, content) {
+     const row = document.createElement('div');
+     row.className = 'message-row ' + role;
 
-    if (role !== 'system') {
-      const label = document.createElement('div');
-      label.className = 'message-role';
-      label.textContent = role === 'user' ? 'You' : 'Assistant';
-      row.appendChild(label);
-    }
+     if (role !== 'system') {
+       const label = document.createElement('div');
+       label.className = 'message-role';
+       label.textContent = role === 'user' ? 'You' : 'Assistant';
+       row.appendChild(label);
+     }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = content;
+     const bubble = document.createElement('div');
+     bubble.className = 'bubble';
+     
+     // 简化版Markdown支持：先尝试使用marked，如果不可用则使用纯文本
+     if (typeof marked !== 'undefined') {
+       try {
+         // 基本HTML转义
+         const escaped = content
+           .replace(/&/g, '&amp;')
+           .replace(/</g, '&lt;')
+           .replace(/>/g, '&gt;');
+         
+         // 渲染Markdown
+         const html = marked.parse(escaped);
+         bubble.innerHTML = html;
+         
+         // 为代码块添加适当的类名
+         bubble.querySelectorAll('code').forEach(code => {
+           if (!code.parentElement || code.parentElement.tagName !== 'PRE') {
+             code.classList.add('inline-code');
+           }
+         });
+       } catch (e) {
+         console.warn('Markdown rendering failed:', e);
+         bubble.textContent = content;
+       }
+     } else {
+       bubble.textContent = content;
+     }
 
-    row.appendChild(bubble);
-    messagesDiv.appendChild(row);
-    scrollBottom();
-  }
+     row.appendChild(bubble);
+     messagesDiv.appendChild(row);
+     scrollBottom();
+   }
 
    function addToolCall(name, args) {\n     const card = document.createElement('div');\n     card.className = 'tool-card'; // Default collapsed, not expanded\n\n     // Use friendly display name\n     const displayName = name === 'replace_lines' ? 'edit' : name;\n     const icon = TOOL_ICONS[name] || '🔧';\n     const argsStr = JSON.stringify(args, null, 2);\n\n     card.innerHTML =\n       '<div class=\"tool-header\">' +\n         '<span class=\"tool-icon\">' + icon + '</span>' +\n         '<span class=\"tool-name\">' + displayName + '</span>' +\n         '<span class=\"tool-status\">running…</span>' +\n       '</div>' +\n       '<div class=\"tool-body\">' + escHtml(argsStr) + '</div>';\n\n     card.querySelector('.tool-header').addEventListener('click', () => {\n       card.classList.toggle('expanded');\n     });\n\n     messagesDiv.appendChild(card);\n     scrollBottom();\n     pendingToolCard = card;\n     return card;\n   }
 
