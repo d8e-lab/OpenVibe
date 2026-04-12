@@ -1497,8 +1497,32 @@ ${error.stack}`);
    private async _handleGetFileInfo(filePath: string): Promise<void> {
      // TODO: 实现获取文件信息功能
      this._post({ type: 'fileInfo', data: { path: filePath, exists: false } });
-   }
+    }
 
+    private async _openDiffView(data: any): Promise<void> {
+      // TODO: 实现并排对比视图功能
+      this._post({ type: 'error', message: 'Diff view not implemented yet' });
+    }
+
+    private async _handleGetDiagnostics(filePath: string): Promise<void> {
+      // TODO: 实现获取诊断信息功能
+      this._post({ type: 'error', message: 'Get diagnostics not implemented yet' });
+    }
+
+    private async _handleExecuteCommand(command: string, args: any): Promise<void> {
+      // TODO: 实现执行命令功能
+      this._post({ type: 'error', message: 'Execute command not implemented yet' });
+    }
+
+    private async _handleGetThemeInfo(): Promise<void> {
+      // TODO: 实现获取主题信息功能
+      this._post({ type: 'error', message: 'Get theme info not implemented yet' });
+    }
+
+    private async _handleShowNotification(message: string, type: string): Promise<void> {
+      // TODO: 实现显示通知功能
+      this._post({ type: 'error', message: 'Show notification not implemented yet' });
+    }
    private _post(msg: unknown) {
     this._view?.webview.postMessage(msg);
   }
