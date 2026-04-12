@@ -611,15 +611,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
          filePath: ctx.filePath,
          startLine: ctx.startLine,
          endLine: ctx.endLine,
-         verdict: approved ? 'CONFIRMED' : 'REJECTED',
-         reason: reason,
-         beforePreview: ctx.beforeContext.split('
+          verdict: approved ? 'CONFIRMED' : 'REJECTED',
+          reason: reason,
+          beforePreview: ctx.beforeContext.split('
 ').slice(0, 5).join('
 '), // 显示前5行作为预览
-         afterPreview: ctx.afterContext.split('
+          afterPreview: ctx.afterContext.split('
 ').slice(0, 5).join('
 '),   // 显示前5行作为预览
-         timestamp: Date.now(),
+          timestamp: Date.now(),
        },
      });
 
