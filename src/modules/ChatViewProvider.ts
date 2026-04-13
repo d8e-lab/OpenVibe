@@ -4,7 +4,7 @@ import { ToolExecutor } from './ToolExecutor';
 import { SessionManager } from './SessionManager';
 import { UIManager } from './UIManager';
 import { ConversationService } from './ConversationService';
-import { gitRollbackTool, listGitSnapshotsTool } from '../tools';
+import { gitRollbackTool, listGitSnapshotsTool, showTextDiffTool } from '../tools';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'vibeCodingChat';
@@ -125,6 +125,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
       if (msg.type === 'rollbackToSnapshot') {
         await this._rollbackToSnapshot(msg.snapshot);
+      }
+      if (msg.type === 'openCheckDiff') {
+        const title =
+          typeof msg.title === 'string' && msg.title.trim()
+            ? msg.title.trim()
+            : 'Replace check';
+        await showTextDiffTool({
+          title,
+          leftContent: typeof msg.leftContent === 'string' ? msg.leftContent : '',
+          rightContent: typeof msg.rightContent === 'string' ? msg.rightContent : '',
+          languageId: typeof msg.languageId === 'string' ? msg.languageId : undefined,
+        });
       }
     });
   }
@@ -380,8 +392,64 @@ Uncommitted changes will be lost.`,
   }
   .check-meta .file-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .check-body { padding: 8px 10px; background: var(--vscode-editor-background); font-size: 11px; line-height: 1.4; display: none; }
-  .check-card.expanded .check-body { display: block; }
-  .reason-section { margin-bottom: 8px; }
+  .check-card.expanded .check-body { display: flex; flex-direction: column; gap: 8px; }
+  .check-diff-toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  }
+  .check-diff-open {
+    padding: 4px 10px; font-size: 11px; font-family: inherit;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-input-border, #555); border-radius: 4px; cursor: pointer;
+  }
+  .check-diff-open:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+  }
+  .check-diff-trunc {
+    font-size: 10px; color: var(--vscode-descriptionForeground);
+  }
+  .check-diff-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 4px;
+    overflow: hidden;
+    max-height: min(42vh, 320px);
+    min-height: 80px;
+  }
+  .check-diff-pane {
+    display: flex; flex-direction: column;
+    min-width: 0;
+    background: var(--vscode-editor-background);
+  }
+  .check-diff-label {
+    flex-shrink: 0;
+    padding: 4px 8px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--vscode-sideBarSectionHeader-background, rgba(128,128,128,0.12));
+    color: var(--vscode-descriptionForeground);
+    border-bottom: 1px solid var(--vscode-input-border, #444);
+  }
+  .check-diff-pre {
+    margin: 0;
+    padding: 6px 8px;
+    flex: 1;
+    overflow: auto;
+    white-space: pre;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  @media (max-width: 420px) {
+    .check-diff-split {
+      grid-template-columns: 1fr;
+      max-height: min(50vh, 400px);
+    }
+  }
+  .reason-section { margin: 0; }
   .reason-section strong { display: inline-block; margin-right: 4px; }
 
   /* Input area */
@@ -615,26 +683,111 @@ Uncommitted changes will be lost.`,
   }
 
   function addCheckCard(data) {
+    const verdict = data.verdict || '';
     const card = document.createElement('div');
-    card.className = 'check-card ' + data.verdict.toLowerCase();
-    const icon = data.verdict === 'CONFIRMED' ? '✅' : '❌';
+    card.className = 'check-card ' + String(verdict).toLowerCase();
+    const icon = verdict === 'CONFIRMED' ? '✅' : '❌';
     const timeStr = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    card.innerHTML =
-      '<div class="check-header">' +
-        '<span class="check-icon">' + icon + '</span>' +
-        '<span class="check-title">Replace check</span>' +
-        '<span class="check-status">' + data.verdict + '</span>' +
-      '</div>' +
-      '<div class="check-meta">' +
-        '<span class="file-path">' + escHtml(data.filePath) + '</span>' +
-        '<span class="line-range">lines ' + data.startLine + '–' + data.endLine + '</span>' +
-        '<span class="check-time">' + timeStr + '</span>' +
-      '</div>' +
-      '<div class="check-body">' +
-        '<div class="reason-section"><strong>LLM Reason:</strong> ' + escHtml(data.reason) + '</div>' +
-      '</div>';
-    card.querySelector('.check-header').addEventListener('click', () => card.classList.toggle('expanded'));
+
+    const header = document.createElement('div');
+    header.className = 'check-header';
+    header.innerHTML =
+      '<span class="check-icon">' + icon + '</span>' +
+      '<span class="check-title">Replace check</span>' +
+      '<span class="check-status">' + escHtml(verdict) + '</span>';
+    header.addEventListener('click', () => card.classList.toggle('expanded'));
+
+    const meta = document.createElement('div');
+    meta.className = 'check-meta';
+    meta.innerHTML =
+      '<span class="file-path">' + escHtml(data.filePath) + '</span>' +
+      '<span class="line-range">lines ' + data.startLine + '–' + data.endLine + '</span>' +
+      '<span class="check-time">' + escHtml(timeStr) + '</span>';
+
+    const body = document.createElement('div');
+    body.className = 'check-body';
+
+    const hasDiff =
+      typeof data.beforeContext === 'string' &&
+      typeof data.afterContext === 'string' &&
+      (data.beforeContext.length > 0 || data.afterContext.length > 0);
+
+    if (hasDiff) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'check-diff-toolbar';
+
+      const openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'check-diff-open';
+      openBtn.textContent = 'Open in editor';
+      openBtn.title = 'Open side-by-side diff in VS Code';
+      openBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const title =
+          'Replace: ' + (data.filePath || '') + ' (' + data.startLine + '–' + data.endLine + ')';
+        vscode.postMessage({
+          type: 'openCheckDiff',
+          title: title,
+          leftContent: data.beforeContext || '',
+          rightContent: data.afterContext || '',
+          languageId: data.languageId || '',
+        });
+      });
+      toolbar.appendChild(openBtn);
+
+      if (data.contextTruncated) {
+        const hint = document.createElement('span');
+        hint.className = 'check-diff-trunc';
+        hint.textContent = 'Long context trimmed for chat — editor shows the same excerpt.';
+        toolbar.appendChild(hint);
+      }
+
+      const split = document.createElement('div');
+      split.className = 'check-diff-split';
+
+      const paneBefore = document.createElement('div');
+      paneBefore.className = 'check-diff-pane';
+      const lb = document.createElement('div');
+      lb.className = 'check-diff-label';
+      lb.textContent = 'Before';
+      const preB = document.createElement('pre');
+      preB.className = 'check-diff-pre';
+      preB.textContent = data.beforeContext || '';
+      paneBefore.appendChild(lb);
+      paneBefore.appendChild(preB);
+
+      const paneAfter = document.createElement('div');
+      paneAfter.className = 'check-diff-pane';
+      const la = document.createElement('div');
+      la.className = 'check-diff-label';
+      la.textContent = 'After';
+      const preA = document.createElement('pre');
+      preA.className = 'check-diff-pre';
+      preA.textContent = data.afterContext || '';
+      paneAfter.appendChild(la);
+      paneAfter.appendChild(preA);
+
+      split.appendChild(paneBefore);
+      split.appendChild(paneAfter);
+
+      body.appendChild(toolbar);
+      body.appendChild(split);
+    }
+
+    const reasonDiv = document.createElement('div');
+    reasonDiv.className = 'reason-section';
+    reasonDiv.innerHTML = '<strong>LLM Reason:</strong> ' + escHtml(data.reason);
+
+    body.appendChild(reasonDiv);
+
+    card.appendChild(header);
+    card.appendChild(meta);
+    card.appendChild(body);
+
     messagesDiv.appendChild(card);
+    if (hasDiff) {
+      card.classList.add('expanded');
+    }
     scrollBottom();
   }
 

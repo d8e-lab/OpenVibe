@@ -83,8 +83,7 @@ export class ToolExecutor {
           
           const list = this._todoList.items
             .map((item, i) => `${i + 1}. [${item.done ? 'x' : ' '}] ${item.text}`)
-            .join('\
-');
+            .join('\n');
           const remaining = this._todoList.items.filter(i => !i.done).length;
           const result = JSON.stringify({
             success: true,
@@ -112,8 +111,7 @@ ${list}
           goal,
           items: items.map(text => ({ text, done: false })),
         };
-        const list = items.map((item, i) => `${i + 1}. [ ] ${item}`).join('\
-');
+        const list = items.map((item, i) => `${i + 1}. [ ] ${item}`).join('\n');
         const result = JSON.stringify({
           success: true,
           message: `Todo list created with ${items.length} items.`,
@@ -144,8 +142,7 @@ ${list}`;
         this._todoList.items[idx].done = true;
         const list = this._todoList.items
           .map((item, i) => `${i + 1}. [${item.done ? 'x' : ' '}] ${item.text}`)
-          .join('\
-');
+          .join('\n');
         const remaining = this._todoList.items.filter(i => !i.done).length;
         const result = JSON.stringify({
           success: true,
