@@ -140,7 +140,7 @@ ${list}`;
         this._todoList.items[idx].done = true;
         const list = this._todoList.items
           .map((item, i) => `${i + 1}. [${item.done ? 'x' : ' '}] ${item.text}`)
-          .join('
+          .join('\
 ');
         const remaining = this._todoList.items.filter(i => !i.done).length;
         const result = JSON.stringify({
