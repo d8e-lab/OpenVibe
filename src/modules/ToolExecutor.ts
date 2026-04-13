@@ -5,12 +5,16 @@ import {
   getWorkspaceInfoTool,
   createDirectoryTool,
   getDiagnosticsTool,
+  getFileInfoTool,
+  showTextDiffTool,
+  showNotificationTool,
+  getThemeInfoTool,
+  runShellCommandTool,
   gitSnapshotTool,
   gitRollbackTool,
   listGitSnapshotsTool
 } from '../tools';
 import type { ReplaceCheckContext } from '../tools';
-import { ChatMessage } from '../types';
 
 export class ToolExecutor {
   private _todoList: { goal: string; items: { text: string; done: boolean }[] } | null = null;
@@ -169,6 +173,29 @@ ${list}
         });
       }
 
+      case 'get_file_info':
+        return getFileInfoTool({ filePath: args.filePath as string });
+
+      case 'show_text_diff':
+        return await showTextDiffTool({
+          title: args.title as string,
+          leftContent: args.leftContent as string,
+          rightContent: args.rightContent as string,
+          languageId: args.languageId as string | undefined,
+        });
+
+      case 'show_notification':
+        return await showNotificationTool({
+          message: args.message as string,
+          severity: args.severity as 'info' | 'warning' | 'error' | undefined,
+        });
+
+      case 'get_theme_info':
+        return getThemeInfoTool();
+
+      case 'run_shell_command':
+        return await runShellCommandTool({ command: args.command as string });
+
       case 'git_snapshot': {
         return gitSnapshotTool({
           sessionId: args.sessionId as string,
@@ -193,14 +220,9 @@ ${list}
     }
   }
 
-  // compact工具需要特殊处理，因为它不在executeTool的switch中
-  // 这个方法的实现在MessageHandler中
-  
-  public getTodoList() {
-    return this._todoList;
-  }
+  /** `compact` is handled in MessageHandler and delegated to ConversationService.compactHistory. */
 
-  public setTodoList(todoList: { goal: string; items: { text: string; done: boolean }[] } | null) {
-    this._todoList = todoList;
+  public clearTodoList(): void {
+    this._todoList = null;
   }
 }

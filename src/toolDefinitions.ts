@@ -233,6 +233,109 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_file_info',
+      description:
+        'Return metadata for a file or directory under the workspace: exists, size, modification time, isFile/isDirectory. ' +
+        'Use to verify paths before reading or editing.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Path relative to the workspace root',
+          },
+        },
+        required: ['filePath'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'show_text_diff',
+      description:
+        'Open the VS Code diff editor with two text snapshots (left = previous, right = new). ' +
+        'Use to show before/after comparisons; pass full text, not paths.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Title shown on the diff tab',
+          },
+          leftContent: {
+            type: 'string',
+            description: 'Left pane content (typically the original)',
+          },
+          rightContent: {
+            type: 'string',
+            description: 'Right pane content (typically the modified)',
+          },
+          languageId: {
+            type: 'string',
+            description: 'Optional VS Code language id (e.g. typescript, json). Defaults to plaintext.',
+          },
+        },
+        required: ['title', 'leftContent', 'rightContent'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'show_notification',
+      description:
+        'Show a short VS Code notification (toast) to the user. Use sparingly for important status.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Message text' },
+          severity: {
+            type: 'string',
+            enum: ['info', 'warning', 'error'],
+            description: 'Defaults to info',
+          },
+        },
+        required: ['message'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_theme_info',
+      description:
+        'Return the active VS Code color theme id and kind (light/dark/highContrast).',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'run_shell_command',
+      description:
+        'Run a shell command with the workspace folder as current working directory. ' +
+        'Output is captured (stdout/stderr). Prefer read_file/edit for file work; use this for builds, tests, or package managers. ' +
+        'Avoid destructive commands unless the user explicitly asked.',
+      parameters: {
+        type: 'object',
+        properties: {
+          command: {
+            type: 'string',
+            description: 'Single shell command line (e.g. npm test, git status)',
+          },
+        },
+        required: ['command'],
+      },
+    },
+  },
   // Git snapshot tools are now handled automatically, not as LLM tools
   {
     type: 'function',
@@ -286,6 +389,11 @@ export const SYSTEM_PROMPT = `You are Vibe Coding Assistant — an AI that can d
   - **complete_todo_item** — Mark a step as done after verifying it is complete.
   - **compact** — Compact conversation history into a concise summary to reduce context window usage.
 - **get_diagnostics** — Get diagnostics (problems, warnings, errors) from VS Code for a specific file or all files.
+- **get_file_info** — Metadata for a workspace path (exists, size, mtime, file vs directory).
+- **show_text_diff** — Open VS Code’s diff editor with two text bodies (before/after).
+- **show_notification** — Show an info/warning/error toast to the user.
+- **get_theme_info** — Active color theme id and light/dark/highContrast kind.
+- **run_shell_command** — Run one shell command in the workspace root (build/test/git, etc.); use carefully.
 ## Configuration
 You can configure API settings and interaction limits through the config dialog in the chat interface. The configuration includes:
 - **API Base URL**: Endpoint for API calls (default: https://api.openai.com/v1)

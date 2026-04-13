@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -607,121 +611,6 @@ export function appendToMemorySection(sectionTitle: string, contentToAdd: string
     return JSON.stringify({ error: `Failed to append to memory: ${e.message}` });
   }
 }
-// export statements removed to avoid duplicate exports
-// ─── Diagnostic comparison helpers ─────────────────────────────────────────────
-
-export interface DiagnosticInfo {
-  message: string;
-  severity: number;  // vscode.DiagnosticSeverity
-  code?: string | number;
-  source?: string;
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
-}
-
-export interface FileDiagnostics {
-  uri: string;
-  diagnostics: DiagnosticInfo[];
-}
-
-/**
- * 比较修改前后的诊断状态，找出新增的错误
- * @param fileUri 文件URI
- * @param modifiedLineStart 修改开始行号（1-based）
- * @param modifiedLineEnd 修改结束行号（1-based）
- * @param contextLines 上下文行数（默认20，用于筛选附近错误）
- * @returns 新增的诊断信息数组
- */
-/**
- * 获取文件的诊断快照
- * @param fileUri 文件URI
- * @returns 诊断信息数组，如果失败则返回空数组
- */
-export async function getDiagnosticsSnapshot(fileUri: string): Promise<DiagnosticInfo[]> {
-  try {
-    const diagResult = getDiagnosticsTool({ uri: fileUri });
-    const parsed = JSON.parse(diagResult);
-    
-    if (!parsed.success || !parsed.diagnostics || !Array.isArray(parsed.diagnostics)) {
-      console.warn('Failed to get diagnostics snapshot:', parsed.error || parsed.message);
-      return [];
-    }
-    
-    const fileDiags = parsed.diagnostics.find((d: any) => d.uri === fileUri);
-    if (!fileDiags || !Array.isArray(fileDiags.diagnostics)) {
-      return [];
-    }
-    
-    return fileDiags.diagnostics as DiagnosticInfo[];
-  } catch (error) {
-    console.error('Error getting diagnostics snapshot:', error);
-    return [];
-  }
-}
-
-/**
- * 比较修改前后的诊断状态，找出新增的错误
- * @param fileUri 文件URI
- * @param modifiedLineStart 修改开始行号（1-based）
- * @param modifiedLineEnd 修改结束行号（1-based）
- * @param contextLines 上下文行数（默认20，用于筛选附近错误）
- * @returns 新增的诊断信息数组
- */
-export async function compareDiagnostics(
-  fileUri: string,
-  modifiedLineStart: number,
-  modifiedLineEnd: number,
-  contextLines: number = 20
-): Promise<DiagnosticInfo[]> {
-  try {
-    // 获取当前诊断状态
-    const diagResult = getDiagnosticsTool({ uri: fileUri });
-    const parsed = JSON.parse(diagResult);
-    
-    if (!parsed.success || !parsed.diagnostics || !Array.isArray(parsed.diagnostics)) {
-      console.warn('Failed to get diagnostics for comparison:', parsed.error || parsed.message);
-      return [];
-    }
-    
-    // 查找目标文件的诊断信息
-    const fileDiags = parsed.diagnostics.find((d: any) => d.uri === fileUri);
-    if (!fileDiags || !Array.isArray(fileDiags.diagnostics)) {
-      return [];  // 没有该文件的诊断信息
-    }
-    
-    // 筛选出位于修改行附近的新增错误
-    const nearbyErrors = fileDiags.diagnostics.filter((diag: DiagnosticInfo) => {
-      // 错误行号范围与修改行范围有重叠或接近
-      const errorLineStart = diag.range.start.line;
-      const errorLineEnd = diag.range.end.line;
-      
-      // 计算与修改范围的距离
-      const distanceToStart = Math.abs(errorLineStart - modifiedLineStart);
-      const distanceToEnd = Math.abs(errorLineEnd - modifiedLineEnd);
-      const minDistance = Math.min(distanceToStart, distanceToEnd);
-      
-      // 检查是否在修改范围内或附近
-      const isInsideModification = 
-        (errorLineStart >= modifiedLineStart && errorLineStart <= modifiedLineEnd) ||
-        (errorLineEnd >= modifiedLineStart && errorLineEnd <= modifiedLineEnd) ||
-        (modifiedLineStart >= errorLineStart && modifiedLineStart <= errorLineEnd);
-      
-      const isNearby = minDistance <= contextLines;
-      
-      // 只关注错误级别的诊断（severity: 0=Error, 1=Warning, 2=Info, 3=Hint）
-      const isErrorLevel = diag.severity === 0;
-      
-      return (isInsideModification || isNearby) && isErrorLevel;
-    });
-    
-    return nearbyErrors;
-  } catch (error) {
-    console.error('Error comparing diagnostics:', error);
-    return [];
-  }
-}
 
 // ─── get_diagnostics ─────────────────────────────────────────────────────────────
 export interface GetDiagnosticsParams {
@@ -791,6 +680,159 @@ export function getDiagnosticsTool(params: GetDiagnosticsParams): string {
     return JSON.stringify({ 
       error: `Failed to get diagnostics: ${e.message}` 
     });
+  }
+}
+
+// ─── get_file_info ───────────────────────────────────────────────────────────
+
+export interface GetFileInfoParams {
+  filePath: string;
+}
+
+export function getFileInfoTool(params: GetFileInfoParams): string {
+  try {
+    const abs = resolveWorkspacePath(params.filePath);
+    if (!fs.existsSync(abs)) {
+      return JSON.stringify({
+        success: true,
+        exists: false,
+        filePath: params.filePath,
+        absolutePath: abs,
+        message: 'Path does not exist',
+      });
+    }
+    const stat = fs.statSync(abs);
+    return JSON.stringify({
+      success: true,
+      exists: true,
+      filePath: params.filePath,
+      absolutePath: abs,
+      isFile: stat.isFile(),
+      isDirectory: stat.isDirectory(),
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+      mtimeIso: new Date(stat.mtimeMs).toISOString(),
+    });
+  } catch (e: any) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+// ─── show_text_diff (side-by-side in diff editor) ────────────────────────────
+
+export interface ShowTextDiffParams {
+  title: string;
+  leftContent: string;
+  rightContent: string;
+  languageId?: string;
+}
+
+export async function showTextDiffTool(params: ShowTextDiffParams): Promise<string> {
+  try {
+    const lang = params.languageId?.trim() || 'plaintext';
+    const leftDoc = await vscode.workspace.openTextDocument({ content: params.leftContent, language: lang });
+    const rightDoc = await vscode.workspace.openTextDocument({ content: params.rightContent, language: lang });
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      leftDoc.uri,
+      rightDoc.uri,
+      params.title,
+      { preview: true }
+    );
+    return JSON.stringify({
+      success: true,
+      message: 'Opened the diff editor. Compare left (previous) vs right (new).',
+    });
+  } catch (e: any) {
+    return JSON.stringify({ error: `Failed to open diff: ${e.message}` });
+  }
+}
+
+// ─── show_notification ────────────────────────────────────────────────────────
+
+export interface ShowNotificationParams {
+  message: string;
+  severity?: 'info' | 'warning' | 'error';
+}
+
+export async function showNotificationTool(params: ShowNotificationParams): Promise<string> {
+  try {
+    const msg = params.message;
+    const sev = params.severity ?? 'info';
+    if (sev === 'error') {
+      await vscode.window.showErrorMessage(msg);
+    } else if (sev === 'warning') {
+      await vscode.window.showWarningMessage(msg);
+    } else {
+      await vscode.window.showInformationMessage(msg);
+    }
+    return JSON.stringify({ success: true, message: 'Notification shown.' });
+  } catch (e: any) {
+    return JSON.stringify({ error: e.message });
+  }
+}
+
+// ─── get_theme_info ───────────────────────────────────────────────────────────
+
+export function getThemeInfoTool(): string {
+  const t = vscode.window.activeColorTheme as {
+    id?: string;
+    label?: string;
+    kind: vscode.ColorThemeKind;
+  };
+  let kindStr = 'highContrast';
+  if (t.kind === vscode.ColorThemeKind.Light) {
+    kindStr = 'light';
+  } else if (t.kind === vscode.ColorThemeKind.Dark) {
+    kindStr = 'dark';
+  }
+  return JSON.stringify({
+    success: true,
+    themeId: t.id ?? t.label ?? 'unknown',
+    kind: kindStr,
+  });
+}
+
+// ─── run_shell_command ───────────────────────────────────────────────────────
+
+export interface RunShellCommandParams {
+  /** Shell command to run; executes with workspace root as cwd. */
+  command: string;
+}
+
+export async function runShellCommandTool(params: RunShellCommandParams): Promise<string> {
+  try {
+    const root = getWorkspaceRoot();
+    const command = (params.command ?? '').trim();
+    if (!command) {
+      return JSON.stringify({ error: 'command is empty' });
+    }
+    try {
+      const { stdout, stderr } = await execAsync(command, {
+        cwd: root,
+        timeout: 120_000,
+        maxBuffer: 2 * 1024 * 1024,
+        windowsHide: true,
+      });
+      const out = stdout == null ? '' : String(stdout);
+      const err = stderr == null ? '' : String(stderr);
+      return JSON.stringify({
+        success: true,
+        stdout: out.slice(0, 500_000),
+        stderr: err.slice(0, 100_000),
+        truncated: out.length > 500_000 || err.length > 100_000,
+      });
+    } catch (e: unknown) {
+      const err = e as { message?: string; stdout?: unknown; stderr?: unknown };
+      return JSON.stringify({
+        success: false,
+        error: err.message ?? String(e),
+        stdout: String(err.stdout ?? '').slice(0, 500_000),
+        stderr: String(err.stderr ?? '').slice(0, 100_000),
+      });
+    }
+  } catch (e: any) {
+    return JSON.stringify({ error: e.message });
   }
 }
 
@@ -865,15 +907,10 @@ export interface GitRollbackParams {
 
 export function gitSnapshotTool(params: GitSnapshotParams): string {
   try {
-    console.log(`[GitSnapshot] Starting for session ${params.sessionId}, instruction: "${params.userInstruction.substring(0, 50)}..."`);
     const root = getWorkspaceRoot();
-    console.log(`[GitSnapshot] Workspace root: ${root}`);
     ensureGitRepository();
-    
-    // Check for uncommitted changes
-    console.log(`[GitSnapshot] Checking Git status...`);
+
     const statusResult = executeGitCommand(['status', '--porcelain'], root);
-    console.log(`[GitSnapshot] Status result: success=${statusResult.success}, stdout="${statusResult.stdout.trim()}", stderr="${statusResult.stderr}"`);
     if (!statusResult.success) {
       return JSON.stringify({
         error: `Failed to get Git status: ${statusResult.stderr}`
@@ -947,57 +984,37 @@ User instruction: ${params.userInstruction.substring(0, 100)}${params.userInstru
 export function gitRollbackTool(params: GitRollbackParams): string {
   try {
     const root = getWorkspaceRoot();
-    console.log(`[GitRollback] Starting rollback for snapshot ${params.snapshotId}, session ${params.sessionId}`);
-    console.log(`[GitRollback] Workspace root: ${root}`);
-    
+
     ensureGitRepository();
-    
-    // Try to find the commit by tag
+
     const tagName = `vibe-snapshot-${params.sessionId}-${params.snapshotId}`;
-    console.log(`[GitRollback] Looking for tag: ${tagName}`);
-    
-    // Check if tag exists
-    // Check if tag exists
+
     const tagCheck = executeGitCommand(['show-ref', '--tags', tagName], root);
-    console.log(`[GitRollback] Tag check result: success=${tagCheck.success}, stdout="${tagCheck.stdout.trim()}", stderr="${tagCheck.stderr.trim()}"`);
-    
+
     if (!tagCheck.success || !tagCheck.stdout.trim()) {
-      console.log(`[GitRollback] Tag not found: ${tagName}`);
-      console.log(`[GitRollback] Trying to find by snapshot ID in commit messages: ${params.snapshotId}`);
-      // Try to find by snapshot ID in commit messages
       const logResult = executeGitCommand(['log', '--all', '--grep', params.snapshotId, '--oneline', '-1'], root);
-      console.log(`[GitRollback] Log search result: success=${logResult.success}, stdout="${logResult.stdout.trim()}", stderr="${logResult.stderr.trim()}"`);
       if (!logResult.success || !logResult.stdout.trim()) {
-        console.log(`[GitRollback] Snapshot not found in commit messages: ${params.snapshotId}`);
         return JSON.stringify({
           error: `Snapshot not found: ${params.snapshotId}`
         });
       }
-      
-      // Extract commit hash from log output
+
       const commitHash = logResult.stdout.split(' ')[0];
-      console.log(`[GitRollback] Extracted commit hash: ${commitHash}`);
-      
+
       if (!commitHash) {
-        console.log(`[GitRollback] Could not extract commit hash from: ${logResult.stdout}`);
         return JSON.stringify({
           error: `Could not find commit for snapshot: ${params.snapshotId}`
         });
       }
-      
-      // Reset to that commit
-      console.log(`[GitRollback] Resetting to commit: ${commitHash}`);
+
       const resetResult = executeGitCommand(['reset', '--hard', commitHash], root);
-      console.log(`[GitRollback] Reset result: success=${resetResult.success}, stderr="${resetResult.stderr}"`);
-      
+
       if (!resetResult.success) {
-        console.log(`[GitRollback] Reset failed: ${resetResult.stderr}`);
         return JSON.stringify({
           error: `Failed to reset to commit: ${resetResult.stderr}`
         });
       }
-      
-      console.log(`[GitRollback] Rollback successful to commit ${commitHash.substring(0, 8)}`);
+
       return JSON.stringify({
         success: true,
         snapshotId: params.snapshotId,
@@ -1006,31 +1023,22 @@ export function gitRollbackTool(params: GitRollbackParams): string {
         message: `Rolled back to snapshot ${params.snapshotId} (commit ${commitHash.substring(0, 8)})`
       });
     }
-    
-    // Reset to tag
-    console.log(`[GitRollback] Resetting to tag: ${tagName}`);
+
     const resetResult = executeGitCommand(['reset', '--hard', tagName], root);
-    console.log(`[GitRollback] Reset result: success=${resetResult.success}, stderr="${resetResult.stderr}"`);
-    
+
     if (!resetResult.success) {
-      console.log(`[GitRollback] Reset to tag failed: ${resetResult.stderr}`);
       return JSON.stringify({
         error: `Failed to reset to tag: ${resetResult.stderr}`
       });
     }
-    
-    console.log(`[GitRollback] Rollback successful to tag ${tagName}`);
-    
-    // Refresh VS Code workspace to show the changes
+
     try {
       const folders = vscode.workspace.workspaceFolders;
       if (folders && folders.length > 0) {
         vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
-        console.log(`[GitRollback] Refreshed workspace explorer`);
       }
     } catch (refreshError) {
       console.warn(`[GitRollback] Failed to refresh workspace: ${refreshError}`);
-      // Continue anyway, as the Git operation succeeded
     }
     
     return JSON.stringify({
@@ -1041,7 +1049,6 @@ export function gitRollbackTool(params: GitRollbackParams): string {
       message: `Rolled back to snapshot ${params.snapshotId} (tag ${tagName})`
     });
   } catch (e: any) {
-    console.log(`[GitRollback] Exception: ${e.message}`);
     return JSON.stringify({
       error: `Failed to rollback: ${e.message}`
     });

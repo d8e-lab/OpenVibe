@@ -2,17 +2,12 @@ import * as vscode from 'vscode';
 import { ApiConfig } from '../types';
 import { ReplaceCheckContext } from '../tools';
 import { sendChatMessage } from '../api';
-import { ChatSession } from '../types';
-
 export class UIManager {
   private _view?: vscode.WebviewView;
   private _outputChannel?: vscode.OutputChannel;
   private _abortController: AbortController = new AbortController();
 
-  constructor(
-    private readonly _context: vscode.ExtensionContext,
-    private readonly _extensionUri: vscode.Uri
-  ) {}
+  constructor(private readonly _context: vscode.ExtensionContext) {}
 
   public setView(view: vscode.WebviewView | undefined): void {
     this._view = view;
@@ -32,17 +27,6 @@ export class UIManager {
     const path = workspace?.uri.fsPath || '';
     const text = `Workspace: ${name} (${path})`;
     this.post({ type: 'addMessage', message: { role: 'system', content: text } });
-  }
-
-  public postSessionsList(sessions: ChatSession[], currentSessionId: string): void {
-    this.post({
-      type: 'setSessions',
-      sessions: sessions.map(s => ({
-        id: s.id,
-        title: s.title,
-        isActive: s.id === currentSessionId,
-      })),
-    });
   }
 
   public getApiConfig(): ApiConfig {
@@ -134,17 +118,5 @@ ${ctx.afterContext}
     );
     
     return result === choices[0];
-  }
-
-  public log(message: string): void {
-    console.log(message);
-    if (this._outputChannel) {
-      this._outputChannel.appendLine(message);
-    }
-  }
-
-  public getWebviewHtml(): string {
-    // 返回HTML内容的方法，这里可以留空或者从ChatViewProvider中提取
-    return '';
   }
 }

@@ -31,8 +31,6 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Chat history cleared');
     })
   );
-
-  console.log('Vibe Coding Assistant is now active');
 }
 
 export function deactivate() {}
