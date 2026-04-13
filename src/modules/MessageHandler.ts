@@ -29,17 +29,23 @@ export class MessageHandler {
   private _sanitizeIncompleteToolCalls(): void {
     // 从chatView.ts中提取的逻辑
     const messages = this._context.getCurrentMessages();
-    // 查找最后的助手消息（包含tool_calls）
-    const lastAssistantIndex = messages.findLastIndex(m => m.role === 'assistant' && m.tool_calls);
+    // 查找最后的助手消息（包含tool_calls）- 使用传统循环替代findLastIndex
+    let lastAssistantIndex = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant' && messages[i].tool_calls) {
+        lastAssistantIndex = i;
+        break;
+      }
+    }
     if (lastAssistantIndex < 0) { return; }
     const assistantMsg = messages[lastAssistantIndex];
     if (!assistantMsg.tool_calls) { return; }
     // 检查对应的tool结果是否存在
-    const toolCallIds = assistantMsg.tool_calls.map(tc => tc.id);
+    const toolCallIds = assistantMsg.tool_calls.map((tc: { id: string }) => tc.id);
     const existingToolCallIds = new Set(
       messages
-        .filter(m => m.role === 'tool' && m.tool_call_id)
-        .map(m => m.tool_call_id!)
+        .filter((m: ChatMessage) => m.role === 'tool' && m.tool_call_id)
+        .map((m: ChatMessage) => m.tool_call_id!)
     );
     const missingIds = toolCallIds.filter(id => !existingToolCallIds.has(id));
     if (missingIds.length === 0) { return; }
@@ -47,7 +53,7 @@ export class MessageHandler {
     messages.splice(lastAssistantIndex, 1);
     // 也删除跟随的tool结果（如果有的话，应该是空的）
     for (let i = messages.length - 1; i >= lastAssistantIndex; i--) {
-      if (messages[i].role === 'tool' && messages[i].tool_call_id && missingIds.includes(messages[i].tool_call_id)) {
+      if (messages[i].role === 'tool' && messages[i].tool_call_id && missingIds.includes(messages[i].tool_call_id!)) {
         messages.splice(i, 1);
       }
     }

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChatViewProvider } from './chatView';
+import { ChatViewProvider } from './modules/ChatViewProvider';
 
 export function activate(context: vscode.ExtensionContext) {
   // 创建输出通道

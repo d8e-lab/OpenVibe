@@ -3,7 +3,7 @@ import { MessageHandler } from './MessageHandler';
 import { ToolExecutor } from './ToolExecutor';
 import { SessionManager } from './SessionManager';
 import { UIManager } from './UIManager';
-import { ChatMessage, ChatSession } from '../types';
+import { ChatMessage, ChatSession, ToolCall } from '../types';
 import { TOOL_DEFINITIONS, SYSTEM_PROMPT } from '../toolDefinitions';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -23,7 +23,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this._uiManager = new UIManager(_context, _extensionUri);
     
     // 初始化SessionManager
-    this._sessionManager = new SessionManager(_context, (msg) => this._uiManager.post(msg));
+    this._sessionManager = new SessionManager(_context, (msg: string) => this._uiManager.post(msg));
     
     // 初始化ToolExecutor
     this._toolExecutor = new ToolExecutor({
@@ -113,12 +113,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       const msg = messages[i];
 
       if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-        const requiredIds = new Set(msg.tool_calls.map(tc => tc.id));
+        const requiredIds = new Set(msg.tool_calls.map((tc: ToolCall) => tc.id));
         const rest = messages.slice(i + 1);
         const respondedIds = new Set(
           rest
-            .filter(m => m.role === 'tool' && m.tool_call_id)
-            .map(m => m.tool_call_id!)
+            .filter((m: ChatMessage) => m.role === 'tool' && m.tool_call_id)
+            .map((m: ChatMessage) => m.tool_call_id!)
         );
 
         if (!Array.from(requiredIds).every(id => respondedIds.has(id))) {
