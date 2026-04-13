@@ -57,6 +57,10 @@ export class MessageHandler {
       const apiConfig = this._context.getApiConfig();
       let iterations = 0;
       const maxIterations = apiConfig.maxInteractions === -1 ? Number.MAX_SAFE_INTEGER : (apiConfig.maxInteractions || MAX_TOOL_ITERATIONS);
+      // Internal-only prompt injection for the next LLM call.
+      // Used to nudge the model when it returns plain text without tool calls and without <TASK_COMPLETE>.
+      // IMPORTANT: Do not append this as a visible chat message.
+      let injectedSystemPrompt = '';
       
       while (iterations < maxIterations && !this._stopRequested) {
         iterations++;
@@ -67,7 +71,7 @@ export class MessageHandler {
           break;
         }
 
-        const allMessages = this._context.buildMessagesForLlm(SYSTEM_PROMPT);
+        const allMessages = this._context.buildMessagesForLlm(SYSTEM_PROMPT + injectedSystemPrompt);
 
         const response = await sendChatMessage(allMessages, apiConfig, TOOL_DEFINITIONS, this._abortController.signal);
 
@@ -81,6 +85,8 @@ export class MessageHandler {
         const hasCompletionSignal = response.content && response.content.includes('<TASK_COMPLETE>');
         
         if (response.toolCalls && response.toolCalls.length > 0) {
+          // Reset any internal nudge once the model starts using tools again.
+          injectedSystemPrompt = '';
           // Push assistant turn (may have reasoning text + tool_calls)
           this._context.addMessage({
             role: 'assistant',
@@ -145,15 +151,17 @@ export class MessageHandler {
           }
 
           if (hasCompletionSignal) {
+            injectedSystemPrompt = '';
             break;
           } else {
             // LLM provided a response without tool calls and without <TASK_COMPLETE>
-            // Add a prompt asking the LLM to either continue or signal completion
-            const prompt = `你的回答没有包含工具调用，也没有任务完成标记<TASK_COMPLETE>。请确认：
-1. 如果任务已完成，请输出<TASK_COMPLETE>
-2. 如果需要继续分析或调用工具，请继续。`;
-            this._context.post({ type: 'addMessage', message: { role: 'user', content: prompt } });
-            this._context.addMessage({ role: 'user', content: prompt });
+            // Nudge the LLM internally (do NOT show in chatbot, do NOT store in session history).
+            injectedSystemPrompt =
+              `\n\n[INTERNAL NUDGE]\n` +
+              `上一轮你只输出了纯文本，没有任何tool calls，也没有输出任务完成标记<TASK_COMPLETE>。\n` +
+              `- 如果任务已完成：请只输出<TASK_COMPLETE>。\n` +
+              `- 如果需要继续：请继续分析并在需要时发起tool calls。\n` +
+              `[END INTERNAL NUDGE]\n`;
           }
         }
         

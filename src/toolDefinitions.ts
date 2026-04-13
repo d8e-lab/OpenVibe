@@ -149,7 +149,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         'Creates a structured todo list that tracks progress through the task. ' +
         'When todo list is empty: creates a new list with the given goal and items. ' +
         'When todo list exists: use expandIndex to expand the specified item into a new parallel todo list (replacing that item). ' +
-        'For example, if list is [a,b,c] and expandIndex=1 with new items [e,f], result should be [a,e,f,c].',
+        'For example, if list is [a,b,c] and expandIndex=1 with new items [e,f], result should be [a,e,f,c]. ' +
+        'When enabled in VS Code settings (vibe-coding.todolistReview.*), the extension runs a blocking independent review: ' +
+        'new/replace lists are todolist.generate; expand is todolist.edit. On repeated review failure the tool returns an error JSON with reviewNotesAccumulated and does not apply changes.',
       parameters: {
         type: 'object',
         properties: {
@@ -426,11 +428,11 @@ export const SYSTEM_PROMPT = `You are Vibe Coding Assistant — an AI that can d
 - **run_shell_command** — Run one shell command in the workspace root (build/test/git, etc.); use carefully.
 ## Configuration
 You can configure API settings and interaction limits through the config dialog in the chat interface. The configuration includes:
-- **API Base URL**: Endpoint for API calls (default: https://api.openai.com/v1)
+- **API Base URL**: Endpoint for API calls (default: https://api.deepseek.com)
 - **API Key**: Authentication key for the API
-- **Model**: AI model to use (default: gpt-4o)
+- **Model**: AI model to use (default: deepseek-reasoner)
 - **Confirm Changes**: Whether to ask for confirmation before applying file changes (default: true)
-- **Max Interactions**: Maximum number of tool call iterations (-1 means unlimited, default: 20)
+- **Max Interactions**: Maximum number of tool call iterations (-1 means unlimited, default: -1)
 - **Max Sequence Length**: Maximum length for generated text sequences (default: 2000)
 
 These settings can be accessed by clicking the gear icon (⚙️) in the chat interface.

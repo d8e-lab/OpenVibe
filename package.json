@@ -79,6 +79,29 @@
           "type": "number",
           "default": 1000000,
           "description": "Maximum length for generated text sequences"
+        },
+        "vibe-coding.todolistReview.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, create_todo_list runs a blocking independent LLM review for todolist.generate / todolist.edit before applying changes."
+        },
+        "vibe-coding.todolistReview.maxAttempts": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Max review/regenerate rounds per create_todo_list call (generate or expand)."
+        },
+        "vibe-coding.todolistReview.reviewTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 5000,
+          "description": "HTTP timeout (ms) for each review-agent and regenerate (generate) API call."
+        },
+        "vibe-coding.todolistReview.editorTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 5000,
+          "description": "HTTP timeout (ms) for each editor-agent API call (todolist.edit expand retries)."
         }
       }
     }

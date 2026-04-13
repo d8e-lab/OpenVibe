@@ -4,6 +4,7 @@ import { ToolExecutor } from './ToolExecutor';
 import { SessionManager } from './SessionManager';
 import { UIManager } from './UIManager';
 import { ConversationService } from './ConversationService';
+import type { TodolistReviewSettings } from './todolistReview';
 import { gitRollbackTool, listGitSnapshotsTool, showTextDiffTool } from '../tools';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -34,6 +35,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       llmCheckReplace: (ctx) => this._uiManager.llmCheckReplace(ctx),
       userConfirmReplace: (ctx) => this._uiManager.userConfirmReplace(ctx),
       getApiConfig: () => this._uiManager.getApiConfig(),
+      getLastUserTextForTools: () => this._conversation.getLastUserTextForTools(),
+      getRelatedContextForTodolistReview: () => this._conversation.getRelatedContextForTodolistReview(),
+      getTodolistReviewSettings: () => ChatViewProvider._readTodolistReviewSettings(),
     });
 
     this._messageHandler = new MessageHandler({
@@ -51,6 +55,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   public setOutputChannel(channel: vscode.OutputChannel): void {
     this._uiManager.setOutputChannel(channel);
+  }
+
+  private static _readTodolistReviewSettings(): TodolistReviewSettings {
+    const c = vscode.workspace.getConfiguration('vibe-coding');
+    return {
+      enabled: c.get<boolean>('todolistReview.enabled', true) !== false,
+      maxAttempts: Math.max(1, c.get<number>('todolistReview.maxAttempts', 5)),
+      reviewTimeoutMs: Math.max(5000, c.get<number>('todolistReview.reviewTimeoutMs', 120000)),
+      editorTimeoutMs: Math.max(5000, c.get<number>('todolistReview.editorTimeoutMs', 120000)),
+    };
   }
 
   // ─── WebviewViewProvider ───────────────────────────────────────────────────

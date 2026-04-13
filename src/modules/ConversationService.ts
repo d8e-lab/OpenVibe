@@ -234,4 +234,41 @@ export class ConversationService {
       this._session.setCurrentMessages(msgs.slice(0, cutIndex));
     }
   }
+
+  /**
+   * Latest non-empty user message in the current session (for tool-side todolist review).
+   */
+  getLastUserTextForTools(): string {
+    const messages = this.getCurrentMessages();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
+        return m.content.trim();
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Recent assistant natural-language context before tools (trimmed), for todolist review "related context".
+   */
+  getRelatedContextForTodolistReview(maxLen = 2500): string {
+    const messages = this.getCurrentMessages();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'assistant') {
+        continue;
+      }
+      const c = typeof m.content === 'string' ? m.content.trim() : '';
+      if (!c) {
+        continue;
+      }
+      let out = c;
+      if (out.length > maxLen) {
+        out = out.slice(0, maxLen) + '\n[…]';
+      }
+      return out;
+    }
+    return '';
+  }
 }

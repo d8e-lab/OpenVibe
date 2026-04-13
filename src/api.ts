@@ -7,11 +7,17 @@ export interface ApiResponse {
   tokenUsage?: TokenUsage;
 }
 
+export interface SendChatMessageOptions {
+  /** Overrides default 120s axios timeout for this request. */
+  timeoutMs?: number;
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   config: ApiConfig,
   tools?: ToolDefinition[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: SendChatMessageOptions
 ): Promise<ApiResponse> {
   const url = `${config.baseUrl}/chat/completions`;
 
@@ -33,7 +39,7 @@ export async function sendChatMessage(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.apiKey}`,
       },
-      timeout: 120000,
+      timeout: options?.timeoutMs ?? 120000,
       signal,
     });
 
