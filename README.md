@@ -29,6 +29,7 @@
 - [项目概述 / Project Overview](#project-overview)
 - [设计理念 / Design Philosophy](#design-philosophy)
 - [核心工具说明 / Core Tools Explained](#core-tools-explained)
+- [多智能体架构 / Multi-Agent Architecture](#multi-agent-architecture)
 - [其它辅助工具 / Other Auxiliary Tools](#other-available-tools)
 - [安装 / Installation](#installation)
 - [配置 / Configuration](#configuration)
@@ -112,6 +113,39 @@ edit(filePath, startLine, endLine, newContent)
 **用途**：替换文件中的特定代码区域，包含自动LLM验证。
 
 > **Purpose**: Replace a specific code region in a file, including automatic LLM verification.
+---
+<h2 id="multi-agent-architecture">🤖 多智能体架构 / Multi-Agent Architecture</h2>
+
+OpenVibe采用先进的多智能体架构来确保代码修改的质量和安全性。系统包含主智能体和独立的审查智能体，分别负责执行任务和验证质量。
+
+> OpenVibe employs an advanced multi‑agent architecture to ensure the quality and safety of code modifications. The system consists of a primary agent and independent review agents, responsible respectively for task execution and quality verification.
+
+### 🛡️ 独立审查机制 / Independent Review Mechanisms
+
+OpenVibe的关键特性是**独立的LLM代理审查系统**，包括：
+1. **任务清单审查** - 在执行前验证任务计划的合理性
+2. **代码编辑审查** - 在应用修改前检查代码变更的正确性
+
+这种"执行-验证"分离的设计确保每个重要操作都经过双重检查，显著减少错误和意外行为。
+
+> A key feature of OpenVibe is the **independent LLM agent review system**, which includes:
+> 1. **Todolist review** – verifies the reasonableness of task plans before execution
+> 2. **Code edit review** – checks the correctness of code changes before applying them
+>
+> This "execute‑then‑verify" separation ensures that every important operation undergoes double‑checking, significantly reducing errors and unintended behavior.
+
+### 🏗️ 架构优势 / Architecture Advantages
+
+- **质量保证**：多个智能体交叉验证，提高代码修改质量
+- **安全性增强**：防止意外破坏性修改
+- **透明度提升**：每个修改都有明确的执行和验证记录
+- **可扩展性**：易于添加新的智能体处理特定任务类型
+
+> - **Quality assurance**: multiple agents cross‑verify each other, improving code modification quality
+> - **Enhanced safety**: prevents accidental destructive modifications
+> - **Improved transparency**: each modification has clear execution and verification records
+> - **Scalability**: easy to add new agents for handling specific task types
+
 ---
 <h2 id="other-available-tools">📚 其它辅助工具 / Other Auxiliary Tools</h2>
 
