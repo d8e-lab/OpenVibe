@@ -134,6 +134,101 @@ OpenVibe的关键特性是**独立的LLM代理审查系统**，包括：
 >
 > This "execute‑then‑verify" separation ensures that every important operation undergoes double‑checking, significantly reducing errors and unintended behavior.
 
+### 🔄 工作流程 / Workflow Process
+
+OpenVibe的完整工作流程遵循"计划-执行-验证"模式，确保每个操作都经过严格的质量控制：
+
+1. **用户请求** → 用户提出代码修改需求
+2. **主智能体规划** → 分析需求并创建任务清单
+3. **任务清单审查** → 独立审查智能体验证任务计划
+4. **主智能体执行** → 按照审查通过的计划执行任务
+5. **代码编辑审查** → 独立审查智能体验证每个代码修改
+6. **修改应用** → 通过验证的修改被安全应用到代码库
+
+> OpenVibe's complete workflow follows the "Plan‑Execute‑Verify" pattern, ensuring each operation undergoes strict quality control:
+>
+> 1. **User request** → User submits code modification requirements
+> 2. **Primary agent planning** → Analyzes requirements and creates task list
+> 3. **Todolist review** → Independent review agent verifies task plan
+> 4. **Primary agent execution** → Executes tasks according to approved plan
+> 5. **Code edit review** → Independent review agent verifies each code modification
+> 6. **Modification application** → Verified modifications are safely applied to the codebase
+
+### 👥 智能体职责说明 / Agent Responsibilities
+
+#### 1. **主智能体 (Primary Agent)**
+- **核心职责**：负责理解用户需求、分析代码、规划和执行任务
+- **具体任务**：
+  - 读取项目文件以理解代码结构
+  - 创建详细的任务清单（todo list）
+  - 执行具体的代码修改操作
+  - 与用户沟通以澄清需求
+- **工作特点**：主动、创造性强、承担主要执行责任
+
+> #### 1. **Primary Agent**
+> - **Core responsibility**: Responsible for understanding user requirements, analyzing code, planning and executing tasks
+> - **Specific tasks**:
+>   - Reads project files to understand code structure
+>   - Creates detailed task lists (todo lists)
+>   - Executes specific code modification operations
+>   - Communicates with users to clarify requirements
+> - **Working characteristics**: Proactive, highly creative, bears main execution responsibility
+
+#### 2. **独立审查智能体 (Independent Review Agent)**
+- **核心职责**：独立验证主智能体的工作，确保质量和安全
+- **具体任务**：
+  - **任务清单审查**：验证任务计划的合理性、完整性和安全性
+  - **代码编辑审查**：检查每个代码修改的正确性、一致性和无副作用性
+  - **质量保证**：提供客观的第三方评估，防止错误和意外行为
+- **工作特点**：中立、严谨、专注于风险识别和预防
+
+> #### 2. **Independent Review Agent**
+> - **Core responsibility**: Independently verifies the primary agent's work, ensuring quality and safety
+> - **Specific tasks**:
+>   - **Todolist review**: Verifies reasonableness, completeness, and safety of task plans
+>   - **Code edit review**: Checks correctness, consistency, and absence of side effects for each code modification
+>   - **Quality assurance**: Provides objective third‑party assessment, preventing errors and unintended behavior
+> - **Working characteristics**: Neutral, rigorous, focused on risk identification and prevention
+
+#### 3. **系统智能体 (System Agent)**
+- **核心职责**：管理整个多智能体系统的协调和资源
+- **具体任务**：
+  - 协调主智能体和审查智能体之间的工作流程
+  - 管理任务执行队列和优先级
+  - 处理智能体间的通信和数据同步
+  - 记录完整的操作日志和审计跟踪
+- **工作特点**：透明、可靠、确保系统的稳定运行
+
+> #### 3. **System Agent**
+> - **Core responsibility**: Manages coordination and resources of the entire multi‑agent system
+> - **Specific tasks**:
+>   - Coordinates workflow between primary and review agents
+>   - Manages task execution queue and priorities
+>   - Handles communication and data synchronization between agents
+>   - Records complete operation logs and audit trails
+> - **Working characteristics**: Transparent, reliable, ensures stable system operation
+
+### 🛠️ 智能体间的协作关系 / Inter‑Agent Collaboration
+
+- **主智能体 ↔ 独立审查智能体**：执行与验证的分离，形成制衡机制
+- **主智能体 ↔ 系统智能体**：任务提交和状态同步，确保执行可追溯
+- **独立审查智能体 ↔ 系统智能体**：审查结果记录和反馈循环
+- **所有智能体 ↔ 用户**：通过统一的界面呈现协调一致的结果
+
+这种多层次的协作关系确保了：
+- **执行质量**：主智能体的创造力与审查智能体的严谨性互补
+- **安全防护**：多层验证防止单一智能体的错误蔓延
+- **系统韧性**：即使某个智能体出现异常，其他智能体仍能保障基本功能
+
+> - **Primary agent ↔ Independent review agent**: Separation of execution and verification, forming a check‑and‑balance mechanism
+> - **Primary agent ↔ System agent**: Task submission and status synchronization, ensuring traceable execution
+> - **Independent review agent ↔ System agent**: Review result recording and feedback loops
+> - **All agents ↔ User**: Present coordinated results through a unified interface
+>
+> This multi‑layer collaboration ensures:
+> - **Execution quality**: Primary agent's creativity complements review agent's rigor
+> - **Safety protection**: Multi‑layer verification prevents errors from a single agent from spreading
+> - **System resilience**: Even if one agent fails, others maintain basic functionality
 ### 🏗️ 架构优势 / Architecture Advantages
 
 - **质量保证**：多个智能体交叉验证，提高代码修改质量
