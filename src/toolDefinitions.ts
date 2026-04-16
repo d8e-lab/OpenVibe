@@ -375,8 +375,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         'Run a shell command with the workspace folder as current working directory. ' +
         'Output is captured (stdout/stderr). The extension runs a dedicated shell editor agent on your proposed command, ' +
         'then an independent review for safety and for avoiding shell-based file edits that should use read_file/edit instead; ' +
-        'if review passes, the user may confirm before execution. Prefer read_file/edit for source changes; use this for builds, tests, or package managers. ' +
-        'Avoid destructive commands unless the user explicitly asked.',
+        'if review passes, the user may confirm before execution. **DO NOT use shell commands to read or modify code files** — ' +
+        'use the dedicated read_file and edit tools for all file operations. Use this tool only for builds, tests, or package managers (npm install, git status, etc.). ' +
+        'Avoid destructive commands unless the user explicitly asked.'
       parameters: {
         type: 'object',
         properties: {
@@ -449,7 +450,7 @@ At runtime, a **Host environment** section is appended to this system message (O
 - **show_text_diff** — Open VS Code’s diff editor with two text bodies (before/after).
 - **show_notification** — Show an info/warning/error toast to the user.
 - **get_theme_info** — Active color theme id and light/dark/highContrast kind.
-- **run_shell_command** — Run one shell command in the workspace root (build/test/git, etc.). A shell editor agent refines your proposed command, then an independent reviewer checks safety and flags shell-based file edits that should use **edit** instead; after that, the user may confirm. Use carefully.
+- **run_shell_command** — Run one shell command in the workspace root (build/test/git, etc.). **DO NOT use shell commands to read or modify files** — use the dedicated read_file and edit tools for file operations. A shell editor agent refines your proposed command, then an independent reviewer checks safety and flags shell-based file edits that should use **edit** instead; after that, the user may confirm. Use carefully.
 
 ## MM_OUTPUT raw payload protocol (IMPORTANT for edit + shell)
 To prevent JSON/Markdown/backslash escaping from corrupting raw patch text or multi-line shell scripts, you MAY use this protocol.
