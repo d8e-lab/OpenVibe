@@ -5,11 +5,10 @@ import { sendChatMessage } from '../api';
 import { gitSnapshotTool } from '../tools';
 import { AUTO_COMPACT_TOKEN_THRESHOLD, MAX_TOOL_ITERATIONS } from '../constants';
 import { extractFirstMmOutput } from '../mmOutput';
+import type { OperationController } from '../operationController';
 
 export class MessageHandler {
   private _isRunning = false;
-  private _stopRequested = false;
-  private _abortController: AbortController = new AbortController();
 
   constructor(
     private readonly _context: {
@@ -26,6 +25,10 @@ export class MessageHandler {
       compactHistory: (triggeredByTokenLimit?: boolean) => Promise<string>;
       /** Reset per-turn UI counters (e.g. edit review #) when the user sends a new instruction. */
       onUserInstructionStart?: () => void;
+      /** Shared operation controller used across main + sub agents. */
+      operation: OperationController;
+      /** Side-effects to run on stop (e.g. resolve confirm bars). */
+      onStopSideEffects?: () => void;
     }
   ) {}
 
@@ -35,8 +38,7 @@ export class MessageHandler {
     this._context.sanitizeIncompleteToolCalls();
 
     this._isRunning = true;
-    this._stopRequested = false;
-    this._abortController = new AbortController();
+    this._context.operation.reset();
     this._context.post({ type: 'setRunning', running: true });
 
     // Empty message = "continue" signal; add placeholder to conversation history for LLM context.
@@ -73,11 +75,11 @@ export class MessageHandler {
       // IMPORTANT: Do not append this as a visible chat message.
       let injectedSystemPrompt = '';
       
-      while (iterations < maxIterations && !this._stopRequested) {
+      while (iterations < maxIterations && !this._context.operation.isStopped()) {
         iterations++;
 
         // Check if user requested stop before each iteration
-        if (this._stopRequested) {
+        if (this._context.operation.isStopped()) {
           this._context.post({ type: 'info', message: 'Operation stopped by user.' });
           break;
         }
@@ -86,10 +88,10 @@ export class MessageHandler {
           SYSTEM_PROMPT + '\n\n' + getAgentRuntimeContextBlock() + injectedSystemPrompt
         );
 
-        const response = await sendChatMessage(allMessages, apiConfig, TOOL_DEFINITIONS, this._abortController.signal);
+        const response = await sendChatMessage(allMessages, apiConfig, TOOL_DEFINITIONS, this._context.operation.signal());
 
         // Check for stop request before processing response
-        if (this._stopRequested) {
+        if (this._context.operation.isStopped()) {
           this._context.post({ type: 'info', message: 'Operation stopped by user.' });
           break;
         }
@@ -116,7 +118,7 @@ export class MessageHandler {
           const mm = extractFirstMmOutput(response.content);
           for (const toolCall of response.toolCalls) {
             // Check for stop request before each tool call
-            if (this._stopRequested) {
+            if (this._context.operation.isStopped()) {
               this._context.post({ type: 'info', message: 'Operation stopped by user.' });
               break;
             }
@@ -228,14 +230,13 @@ export class MessageHandler {
       this._context.post({ type: 'loading', loading: false });
       this._context.post({ type: 'setRunning', running: false });
       this._isRunning = false;
-      this._stopRequested = false;
     }
   }
 
   public stopCurrentOperation(): void {
     if (this._isRunning) {
-      this._stopRequested = true;
-      this._abortController.abort();
+      this._context.onStopSideEffects?.();
+      this._context.operation.stop();
       this._context.post({ type: 'info', message: 'Stopping current operation...' });
     }
   }

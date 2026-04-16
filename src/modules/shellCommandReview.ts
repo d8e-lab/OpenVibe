@@ -1,6 +1,6 @@
 import { getAgentRuntimeContextBlock } from '../agentRuntimeContext';
 import { sendChatMessage } from '../api';
-import type { ApiConfig, ChatMessage } from '../types';
+import type { ApiConfig, ChatMessage, AgentLogEntry } from '../types';
 import { extractFirstMmOutput } from '../mmOutput';
 export interface ShellCommandReviewSettings {
   enabled: boolean;
@@ -88,9 +88,22 @@ function parseEditorCommand(content: string | null): { command: string } {
 async function chatJson(
   messages: ChatMessage[],
   apiConfig: ApiConfig,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal,
+  log?: (e: AgentLogEntry) => void,
+  agent?: string
 ): Promise<string | null> {
-  const res = await sendChatMessage(messages, apiConfig, undefined, undefined, { timeoutMs });
+  try {
+    log?.({ at: Date.now(), agent: agent || 'agent', stage: 'request', data: { timeoutMs, messages } });
+  } catch {
+    /* ignore */
+  }
+  const res = await sendChatMessage(messages, apiConfig, undefined, signal, { timeoutMs });
+  try {
+    log?.({ at: Date.now(), agent: agent || 'agent', stage: 'response', data: { content: res.content } });
+  } catch {
+    /* ignore */
+  }
   return res.content;
 }
 
@@ -152,6 +165,8 @@ export async function shellEditorCandidate(params: {
   priorCandidate: string;
   reviewNotes: string[];
   editorTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<{ command: string }> {
   const isRevise = params.reviewNotes.length > 0;
   const userMsg = isRevise
@@ -177,7 +192,10 @@ export async function shellEditorCandidate(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.editorTimeoutMs
+    params.editorTimeoutMs,
+    params.signal,
+    params.log,
+    'shellEditor'
   );
   return parseEditorCommand(content);
 }
@@ -190,6 +208,8 @@ export async function reviewShellCommand(params: {
   command: string;
   proposedFromTool: string;
   reviewTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<ShellReviewAgentResult> {
   const userMsg =
     `## User request\n${params.userRequest || '(none)'}\n\n` +
@@ -204,7 +224,10 @@ export async function reviewShellCommand(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.reviewTimeoutMs
+    params.reviewTimeoutMs,
+    params.signal,
+    params.log,
+    'shellReview'
   );
   return parseShellReviewResult(content);
 }

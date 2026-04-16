@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChatMessage, ChatSession } from '../types';
+import { ChatMessage, ChatSession, AgentLogEntry } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -111,6 +111,31 @@ export class SessionManager {
     const messages = this.getCurrentMessages();
     messages.push(msg);
     this.setCurrentMessages(messages);
+  }
+
+  public addAgentLog(entry: AgentLogEntry): void {
+    let session = this._sessions.find(s => s.id === this._currentSessionId);
+    if (!session) {
+      session = {
+        id: this._currentSessionId,
+        title: 'Chat Session',
+        created: Date.now(),
+        updated: Date.now(),
+        messages: [],
+        agentLogs: [],
+      };
+      this._sessions.push(session);
+    }
+    if (!Array.isArray(session.agentLogs)) {
+      session.agentLogs = [];
+    }
+    session.agentLogs.push(entry);
+    // Keep logs bounded to avoid huge index.json growth.
+    if (session.agentLogs.length > 500) {
+      session.agentLogs = session.agentLogs.slice(session.agentLogs.length - 500);
+    }
+    session.updated = Date.now();
+    this._saveSessions();
   }
 
   public saveCurrentSession(): void {

@@ -244,4 +244,16 @@ ${ctx.afterContext}
       resolver(approved);
     }
   }
+
+  /** Called when the user hits Stop: resolve any pending confirms as "cancel". */
+  public cancelPendingConfirms(): void {
+    for (const [id, resolver] of this._pendingReplaceConfirms.entries()) {
+      try { resolver(false); } catch { /* ignore */ }
+      this._pendingReplaceConfirms.delete(id);
+    }
+    for (const [id, resolver] of this._pendingShellConfirms.entries()) {
+      try { resolver(false); } catch { /* ignore */ }
+      this._pendingShellConfirms.delete(id);
+    }
+  }
 }

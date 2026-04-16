@@ -14,6 +14,16 @@ export interface ChatMessage {
   tool_call_id?: string;
 }
 
+export interface AgentLogEntry {
+  at: number;
+  /** e.g. "codeEditReview", "shellEditor", "shellReview", "todolistReview", "todolistWriter" */
+  agent: string;
+  /** Free-form stage label like "request" | "response" | "error" */
+  stage: string;
+  /** Sanitized payload for debugging; keep it JSON-serializable. */
+  data: any;
+}
+
 export interface GitSnapshot {
   id: string;
   timestamp: number;
@@ -29,6 +39,7 @@ export interface ChatSession {
   updated: number;
   messages: ChatMessage[];
   snapshots?: GitSnapshot[];
+  agentLogs?: AgentLogEntry[];
   isActive?: boolean;
 }
 

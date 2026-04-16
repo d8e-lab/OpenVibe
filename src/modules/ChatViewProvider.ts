@@ -7,6 +7,7 @@ import { ConversationService } from './ConversationService';
 import type { TodolistReviewSettings } from './todolistReview';
 import type { ShellCommandReviewSettings } from './shellCommandReview';
 import { gitRollbackTool, listGitSnapshotsTool, showTextDiffTool } from '../tools';
+import { OperationController } from '../operationController';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'vibeCodingChat';
@@ -16,6 +17,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private _sessionManager: SessionManager;
   private _uiManager: UIManager;
   private _conversation: ConversationService;
+  private _operation = new OperationController();
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -47,6 +49,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           relatedContext,
           post: (m: any) => this._uiManager.post(m),
           reviewRound,
+          signal: this._operation.signal(),
+          log: (e) => this._conversation.addAgentLog(e),
         });
       },
       userConfirmReplace: (ctx) => this._uiManager.userConfirmReplace(ctx),
@@ -56,6 +60,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       getRelatedContextForTodolistReview: () => this._conversation.getRelatedContextForTodolistReview(),
       getTodolistReviewSettings: () => ChatViewProvider._readTodolistReviewSettings(),
       getShellCommandReviewSettings: () => ChatViewProvider._readShellCommandReviewSettings(),
+      isStopped: () => this._operation.isStopped(),
+      signal: () => this._operation.signal(),
+      log: (e) => this._conversation.addAgentLog(e),
     });
 
     this._messageHandler = new MessageHandler({
@@ -70,6 +77,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       getTodoControlInfo: () => this._toolExecutor.getTodoControlInfo(),
       compactHistory: (triggeredByTokenLimit) => this._conversation.compactHistory(triggeredByTokenLimit),
       onUserInstructionStart: () => this._toolExecutor.resetReviewUiCounters(),
+      operation: this._operation,
+      onStopSideEffects: () => this._uiManager.cancelPendingConfirms(),
     });
   }
 

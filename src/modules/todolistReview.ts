@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { getAgentRuntimeContextBlock } from '../agentRuntimeContext';
 import { sendChatMessage } from '../api';
-import type { ApiConfig, ChatMessage } from '../types';
+import type { ApiConfig, ChatMessage, AgentLogEntry } from '../types';
 import { getMemoryFilePath } from '../tools';
 
 export interface TodolistReviewSettings {
@@ -129,9 +129,22 @@ export function formatTodoStateForPrompt(state: TodoState): string {
 async function chatJson(
   messages: ChatMessage[],
   apiConfig: ApiConfig,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal,
+  log?: (e: AgentLogEntry) => void,
+  agent?: string
 ): Promise<string | null> {
-  const res = await sendChatMessage(messages, apiConfig, undefined, undefined, { timeoutMs });
+  try {
+    log?.({ at: Date.now(), agent: agent || 'agent', stage: 'request', data: { timeoutMs, messages } });
+  } catch {
+    /* ignore */
+  }
+  const res = await sendChatMessage(messages, apiConfig, undefined, signal, { timeoutMs });
+  try {
+    log?.({ at: Date.now(), agent: agent || 'agent', stage: 'response', data: { content: res.content } });
+  } catch {
+    /* ignore */
+  }
   return res.content;
 }
 
@@ -195,6 +208,8 @@ export async function reviewTodolistGenerate(params: {
   projectConstraints: string;
   relatedContext: string;
   reviewTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<ReviewAgentResult> {
   const candidateBody = `Goal: ${params.candidateGoal}\nItems:\n${params.candidateItems
     .map((t, i) => `${i + 1}. ${t}`)
@@ -213,7 +228,10 @@ export async function reviewTodolistGenerate(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.reviewTimeoutMs
+    params.reviewTimeoutMs,
+    params.signal,
+    params.log,
+    'todolistReview'
   );
   return parseReviewAgentResult(content);
 }
@@ -230,6 +248,8 @@ export async function reviewTodolistEdit(params: {
   relatedContext: string;
   reviewNotesAccumulated: string[];
   reviewTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<ReviewAgentResult> {
   const userMsg =
     `## User request\n${params.userRequest || '(none)'}\n\n` +
@@ -252,7 +272,10 @@ export async function reviewTodolistEdit(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.reviewTimeoutMs
+    params.reviewTimeoutMs,
+    params.signal,
+    params.log,
+    'todolistReview'
   );
   return parseReviewAgentResult(content);
 }
@@ -265,6 +288,8 @@ export async function regenerateGenerateCandidate(params: {
   reviewNotes: string[];
   projectConstraints: string;
   reviewTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<{ goal: string; items: string[] }> {
   const userMsg =
     `User request:\n${params.userRequest || '(none)'}\n\n` +
@@ -280,7 +305,10 @@ export async function regenerateGenerateCandidate(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.reviewTimeoutMs
+    params.reviewTimeoutMs,
+    params.signal,
+    params.log,
+    'todolistWriter'
   );
   return parseGoalItems(content);
 }
@@ -294,6 +322,8 @@ export async function editorExpandCandidate(params: {
   reviewNotes: string[];
   projectConstraints: string;
   editorTimeoutMs: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<{ replacementItems: string[] }> {
   const userMsg =
     `User request:\n${params.userRequest || '(none)'}\n\n` +
@@ -312,7 +342,10 @@ export async function editorExpandCandidate(params: {
       { role: 'user', content: userMsg },
     ],
     params.apiConfig,
-    params.editorTimeoutMs
+    params.editorTimeoutMs,
+    params.signal,
+    params.log,
+    'todolistWriter'
   );
   return parseReplacementItems(content);
 }

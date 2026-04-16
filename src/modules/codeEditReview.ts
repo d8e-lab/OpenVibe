@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getAgentRuntimeContextBlock } from '../agentRuntimeContext';
 import { sendChatMessage } from '../api';
-import type { ApiConfig, ChatMessage } from '../types';
+import type { ApiConfig, ChatMessage, AgentLogEntry } from '../types';
 import type { ReplaceCheckContext, ReplaceCheckResult } from '../tools';
 import { loadMemoryExcerpt } from './todolistReview';
 
@@ -111,6 +111,8 @@ export async function llmIndependentEditReview(params: {
   post: (msg: any) => void;
   /** 1-based index of this Replace check in the current user instruction (shown on the card). */
   reviewRound?: number;
+  signal?: AbortSignal;
+  log?: (e: AgentLogEntry) => void;
 }): Promise<ReplaceCheckResult> {
   const settings = readEditReviewSettings();
   if (!settings.enabled) {
@@ -133,11 +135,26 @@ export async function llmIndependentEditReview(params: {
       { role: 'system', content: REVIEW_SYSTEM + '\n\n' + getAgentRuntimeContextBlock() },
       { role: 'user', content: userMsg },
     ];
-    const res = await sendChatMessage(messages, params.apiConfig, undefined, undefined, {
+    try {
+      params.log?.({ at: Date.now(), agent: 'codeEditReview', stage: 'request', data: { messages } });
+    } catch {
+      /* ignore */
+    }
+    const res = await sendChatMessage(messages, params.apiConfig, undefined, params.signal, {
       timeoutMs: settings.timeoutMs,
     });
     content = res.content;
+    try {
+      params.log?.({ at: Date.now(), agent: 'codeEditReview', stage: 'response', data: { content } });
+    } catch {
+      /* ignore */
+    }
   } catch {
+    try {
+      params.log?.({ at: Date.now(), agent: 'codeEditReview', stage: 'error', data: { error: 'request failed' } });
+    } catch {
+      /* ignore */
+    }
     content = null;
   }
 

@@ -34,9 +34,13 @@
 | 2025-04-14 | 增加**独立审查**：任务清单审查与代码编辑审查，由独立 LLM 代理提升修改质量。 |
 | 2025-04-16 | **强化 shell 审查与执行**：1) 明确拒绝用 shell 获取项目上下文（强制使用 `read`/`find` 工具） 2) 结构化返回 + 关键错误摘要 3) 注入 todo 与最近执行历史到审查流程 |
 | 2025-04-19 | **新增转义字符处理协议**：引入 `MM_OUTPUT` 特殊标记，允许 `edit` 和 `run_shell_command` 工具直接传递原始文本，避免 JSON/Markdown 转义问题。 |
+
 > **2025-04-11:** Git snapshots during coding; rollback and history in the UI.  
+
 > **2025-04-14:** Independent review for todo lists and code edits via separate LLM agents.  
+
 > **2025-04-16:** Enhanced shell review & execution: 1) Reject shell for project context (use `read`/`find` instead) 2) Structured output + key error summaries 3) Todo & recent history injection.
+
 > **2025-04-19:** Raw payload protocol `MM_OUTPUT` for `edit` and `run_shell_command` tools — bypass JSON/Markdown escaping for complex multiline code and shell scripts.
 
 <h2 id="project-overview">项目概述 / Project overview</h2>

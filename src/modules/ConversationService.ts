@@ -1,4 +1,4 @@
-import { ChatMessage, ToolCall, ApiConfig } from '../types';
+import { ChatMessage, ToolCall, ApiConfig, AgentLogEntry } from '../types';
 import { getAgentRuntimeContextBlock } from '../agentRuntimeContext';
 import { sendChatMessage } from '../api';
 import { SessionManager } from './SessionManager';
@@ -23,6 +23,10 @@ export class ConversationService {
 
   addMessage(msg: ChatMessage): void {
     this._session.addMessage(msg);
+  }
+
+  addAgentLog(entry: AgentLogEntry): void {
+    this._session.addAgentLog(entry);
   }
 
   setCurrentMessages(messages: ChatMessage[]): void {

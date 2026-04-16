@@ -15,7 +15,7 @@ import {
   listGitSnapshotsTool
 } from '../tools';
 import type { ReplaceCheckContext, ReplaceCheckResult } from '../tools';
-import type { ApiConfig } from '../types';
+import type { ApiConfig, AgentLogEntry } from '../types';
 import type { TodolistReviewSettings, TodoState } from './todolistReview';
 import {
   applyExpandToClone,
@@ -47,8 +47,35 @@ export class ToolExecutor {
       getRelatedContextForTodolistReview: () => string;
       getTodolistReviewSettings: () => TodolistReviewSettings;
       getShellCommandReviewSettings: () => ShellCommandReviewSettings;
+      isStopped?: () => boolean;
+      signal?: () => AbortSignal;
+      log?: (entry: AgentLogEntry) => void;
     }
   ) {}
+
+  private _stopped(): boolean {
+    try {
+      return this._context.isStopped?.() === true;
+    } catch {
+      return false;
+    }
+  }
+
+  private _signal(): AbortSignal | undefined {
+    try {
+      return this._context.signal?.();
+    } catch {
+      return undefined;
+    }
+  }
+
+  private _log(agent: string, stage: string, data: any): void {
+    try {
+      this._context.log?.({ at: Date.now(), agent, stage, data });
+    } catch {
+      // ignore
+    }
+  }
 
   /** Call when the user sends a new message (not empty "continue") so edit check numbering restarts. */
   public resetReviewUiCounters(): void {
@@ -205,6 +232,9 @@ ${list}
     if (!proposedFromTool) {
       return JSON.stringify({ error: 'command is empty' });
     }
+    if (this._stopped()) {
+      return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+    }
 
     const cfg = this._context.getShellCommandReviewSettings();
     const apiConfig = this._context.getApiConfig();
@@ -243,7 +273,11 @@ ${list}
     let commandCandidate = proposedFromTool;
 
     for (let attempt = 1; attempt <= cfg.maxAttempts; attempt++) {
+      if (this._stopped()) {
+        return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+      }
       try {
+        this._log('shellEditor', 'request', { attempt, proposedFromTool, priorCandidate: commandCandidate, reviewNotes });
         const edited = await shellEditorCandidate({
           apiConfig,
           userRequest,
@@ -253,9 +287,16 @@ ${list}
           priorCandidate: commandCandidate,
           reviewNotes,
           editorTimeoutMs: cfg.editorTimeoutMs,
+          signal: this._signal(),
+          log: (e) => this._context.log?.(e),
         });
         commandCandidate = edited.command;
+        this._log('shellEditor', 'response', { attempt, command: commandCandidate });
       } catch (e: any) {
+        if (e?.name === 'AbortError' || this._stopped()) {
+          return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+        }
+        this._log('shellEditor', 'error', { attempt, error: e?.message ?? String(e) });
         return JSON.stringify({
           success: false,
           operation: 'run_shell_command',
@@ -264,15 +305,35 @@ ${list}
         });
       }
 
-      const review = await reviewShellCommand({
-        apiConfig,
-        userRequest,
-        relatedContext,
-        projectConstraints: memoryExcerpt,
-        command: commandCandidate,
-        proposedFromTool,
-        reviewTimeoutMs: cfg.reviewTimeoutMs,
-      });
+      if (this._stopped()) {
+        return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+      }
+      this._log('shellReview', 'request', { attempt, command: commandCandidate, proposedFromTool });
+      let review;
+      try {
+        review = await reviewShellCommand({
+          apiConfig,
+          userRequest,
+          relatedContext,
+          projectConstraints: memoryExcerpt,
+          command: commandCandidate,
+          proposedFromTool,
+          reviewTimeoutMs: cfg.reviewTimeoutMs,
+          signal: this._signal(),
+          log: (e) => this._context.log?.(e),
+        });
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || this._stopped()) {
+          return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+        }
+        return JSON.stringify({
+          success: false,
+          operation: 'run_shell_command',
+          error: `Shell review agent failed: ${e?.message ?? String(e)}`,
+          reviewNotesAccumulated: reviewNotes,
+        });
+      }
+      this._log('shellReview', 'response', { attempt, decision: review.decision, summary: review.summary, notes: review.notes });
 
       if (review.decision === 'PASS') {
         if (attempt > 1) {
@@ -286,6 +347,9 @@ ${list}
           });
         }
         if (confirmShell) {
+          if (this._stopped()) {
+            return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
+          }
           const approved = await this._context.userConfirmShellCommand(commandCandidate);
           if (!approved) {
             return JSON.stringify({
@@ -294,6 +358,9 @@ ${list}
               reviewedCommand: commandCandidate,
             });
           }
+        }
+        if (this._stopped()) {
+          return JSON.stringify({ success: false, operation: 'run_shell_command', error: 'Operation stopped by user.' });
         }
         const execResult = await runShellCommandTool({ command: commandCandidate });
         // Record recent executions to help the reviewer avoid redundant reruns.
@@ -444,6 +511,9 @@ ${list}
     if (!cfg.enabled) {
       return this._createTodoListWithoutReview(goal, items, expandIndex);
     }
+    if (this._stopped()) {
+      return JSON.stringify({ success: false, operation: 'create_todo_list', error: 'Operation stopped by user.' });
+    }
 
     const userRequest = this._context.getLastUserTextForTools();
     const relatedContext = this._context.getRelatedContextForTodolistReview();
@@ -465,6 +535,9 @@ ${list}
       let reviewNotes: string[] = [];
 
       for (let attempt = 1; attempt <= cfg.maxAttempts; attempt++) {
+        if (this._stopped()) {
+          return JSON.stringify({ success: false, operation: 'todolist.edit', error: 'Operation stopped by user.' });
+        }
         const baselineForApply: TodoState = baselineFrozen;
         let modified: TodoState;
         try {
@@ -474,19 +547,31 @@ ${list}
         }
 
         const changeSummary = `Replace item ${expandIndex} with ${replacementSlice.length} new step(s). Tool goal: ${goal}`;
-        const review = await reviewTodolistEdit({
-          apiConfig,
-          userRequest,
-          operationGoal: goal,
-          baseline: baselineFrozen,
-          modified,
-          expandIndex,
-          changeSummary,
-          projectConstraints: memoryExcerpt,
-          relatedContext,
-          reviewNotesAccumulated: reviewNotes,
-          reviewTimeoutMs: cfg.reviewTimeoutMs,
-        });
+        this._log('todolistReview', 'request', { operation: 'edit', attempt, expandIndex, changeSummary });
+        let review;
+        try {
+          review = await reviewTodolistEdit({
+            apiConfig,
+            userRequest,
+            operationGoal: goal,
+            baseline: baselineFrozen,
+            modified,
+            expandIndex,
+            changeSummary,
+            projectConstraints: memoryExcerpt,
+            relatedContext,
+            reviewNotesAccumulated: reviewNotes,
+            reviewTimeoutMs: cfg.reviewTimeoutMs,
+            signal: this._signal(),
+            log: (e) => this._context.log?.(e),
+          });
+        } catch (e: any) {
+          if (e?.name === 'AbortError' || this._stopped()) {
+            return JSON.stringify({ success: false, operation: 'todolist.edit', error: 'Operation stopped by user.' });
+          }
+          return JSON.stringify({ success: false, operation: 'todolist.edit', error: `Review agent failed: ${e?.message ?? String(e)}` });
+        }
+        this._log('todolistReview', 'response', { operation: 'edit', attempt, decision: review.decision, summary: review.summary, notes: review.notes });
 
         if (review.decision === 'PASS') {
           this._todoList = {
@@ -540,6 +625,7 @@ ${list}
         });
 
         try {
+          this._log('todolistWriter', 'request', { operation: 'edit', attempt, expandIndex, proposedNewItems: intentReplacement, reviewNotes });
           const edited = await editorExpandCandidate({
             apiConfig,
             userRequest,
@@ -549,9 +635,13 @@ ${list}
             reviewNotes,
             projectConstraints: memoryExcerpt,
             editorTimeoutMs: cfg.editorTimeoutMs,
+            signal: this._signal(),
+            log: (e) => this._context.log?.(e),
           });
           replacementSlice = edited.replacementItems;
+          this._log('todolistWriter', 'response', { operation: 'edit', attempt, replacementItems: replacementSlice });
         } catch (e: any) {
+          this._log('todolistWriter', 'error', { operation: 'edit', attempt, error: e?.message ?? String(e) });
           return JSON.stringify({
             success: false,
             operation: 'todolist.edit',
@@ -570,16 +660,31 @@ ${list}
     const operationGoal = goal;
 
     for (let attempt = 1; attempt <= cfg.maxAttempts; attempt++) {
-      const review = await reviewTodolistGenerate({
-        apiConfig,
-        userRequest,
-        operationGoal,
-        candidateGoal: cg,
-        candidateItems: ci,
-        projectConstraints: memoryExcerpt,
-        relatedContext,
-        reviewTimeoutMs: cfg.reviewTimeoutMs,
-      });
+      if (this._stopped()) {
+        return JSON.stringify({ success: false, operation: 'todolist.generate', error: 'Operation stopped by user.' });
+      }
+      this._log('todolistReview', 'request', { operation: 'generate', attempt, candidateGoal: cg, candidateItems: ci });
+      let review;
+      try {
+        review = await reviewTodolistGenerate({
+          apiConfig,
+          userRequest,
+          operationGoal,
+          candidateGoal: cg,
+          candidateItems: ci,
+          projectConstraints: memoryExcerpt,
+          relatedContext,
+          reviewTimeoutMs: cfg.reviewTimeoutMs,
+          signal: this._signal(),
+          log: (e) => this._context.log?.(e),
+        });
+      } catch (e: any) {
+        if (e?.name === 'AbortError' || this._stopped()) {
+          return JSON.stringify({ success: false, operation: 'todolist.generate', error: 'Operation stopped by user.' });
+        }
+        return JSON.stringify({ success: false, operation: 'todolist.generate', error: `Review agent failed: ${e?.message ?? String(e)}` });
+      }
+      this._log('todolistReview', 'response', { operation: 'generate', attempt, decision: review.decision, summary: review.summary, notes: review.notes });
 
       if (review.decision === 'PASS') {
         this._todoList = { goal: cg, items: ci.map((text) => ({ text, done: false })) };
@@ -629,6 +734,7 @@ ${list}
       });
 
       try {
+        this._log('todolistWriter', 'request', { operation: 'generate', attempt, priorGoal: cg, priorItems: ci, reviewNotes });
         const next = await regenerateGenerateCandidate({
           apiConfig,
           userRequest,
@@ -637,10 +743,14 @@ ${list}
           reviewNotes,
           projectConstraints: memoryExcerpt,
           reviewTimeoutMs: cfg.reviewTimeoutMs,
+          signal: this._signal(),
+          log: (e) => this._context.log?.(e),
         });
         cg = next.goal;
         ci = next.items;
+        this._log('todolistWriter', 'response', { operation: 'generate', attempt, goal: cg, items: ci });
       } catch (e: any) {
+        this._log('todolistWriter', 'error', { operation: 'generate', attempt, error: e?.message ?? String(e) });
         return JSON.stringify({
           success: false,
           operation: 'todolist.generate',
