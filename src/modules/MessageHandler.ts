@@ -21,6 +21,7 @@ export class MessageHandler {
       saveCurrentSession: () => void;
       sanitizeIncompleteToolCalls: () => void;
       executeTool: (name: string, args: Record<string, unknown>) => Promise<string>;
+      getTodoControlInfo: () => { goal: string; list: string; remaining: number } | null;
       compactHistory: (triggeredByTokenLimit?: boolean) => Promise<string>;
       /** Reset per-turn UI counters (e.g. edit review #) when the user sends a new instruction. */
       onUserInstructionStart?: () => void;
@@ -62,7 +63,7 @@ export class MessageHandler {
       let iterations = 0;
       const maxIterations = apiConfig.maxInteractions === -1 ? Number.MAX_SAFE_INTEGER : (apiConfig.maxInteractions || MAX_TOOL_ITERATIONS);
       // Internal-only prompt injection for the next LLM call.
-      // Used to nudge the model when it returns plain text without tool calls and without <TASK_COMPLETE>.
+      // Used to nudge the model when it returns plain text without tool calls (it should either call tools or task_complete).
       // IMPORTANT: Do not append this as a visible chat message.
       let injectedSystemPrompt = '';
       
@@ -87,9 +88,6 @@ export class MessageHandler {
           break;
         }
 
-        // Check if the assistant output contains the completion signal
-        const hasCompletionSignal = response.content && response.content.includes('<TASK_COMPLETE>');
-        
         if (response.toolCalls && response.toolCalls.length > 0) {
           // Reset any internal nudge once the model starts using tools again.
           injectedSystemPrompt = '';
@@ -106,6 +104,7 @@ export class MessageHandler {
           }
 
           // Execute each tool call sequentially
+          let taskCompleteRequested = false;
           for (const toolCall of response.toolCalls) {
             // Check for stop request before each tool call
             if (this._stopRequested) {
@@ -134,17 +133,20 @@ export class MessageHandler {
             if (name !== 'compact') {
               this._context.addMessage({ role: 'tool', content: result, tool_call_id: toolCall.id });
             }
+
+            if (name === 'task_complete') {
+              taskCompleteRequested = true;
+              break;
+            }
           }
 
+          if (taskCompleteRequested) {
+            break;
+          }
           // Go back to the top of the loop to continue the conversation
         } else {
           // Text response (no tool calls)
           let content = response.content ?? '(no response)';
-
-          // Strip the completion signal from the visible text
-          if (hasCompletionSignal) {
-            content = content.replace('<TASK_COMPLETE>', '').trim();
-          }
 
           this._context.addMessage({ role: 'assistant', content });
           this._context.post({ type: 'addMessage', message: { role: 'assistant', content } });
@@ -156,19 +158,29 @@ export class MessageHandler {
             }
           }
 
-          if (hasCompletionSignal) {
+          const todo = this._context.getTodoControlInfo();
+          if (!todo) {
+            // No todo list: plain text response means we're done.
             injectedSystemPrompt = '';
             break;
-          } else {
-            // LLM provided a response without tool calls and without <TASK_COMPLETE>
-            // Nudge the LLM internally (do NOT show in chatbot, do NOT store in session history).
-            injectedSystemPrompt =
-              `\n\n[INTERNAL NUDGE]\n` +
-              `上一轮你只输出了纯文本，没有任何tool calls，也没有输出任务完成标记<TASK_COMPLETE>。\n` +
-              `- 如果任务已完成：请只输出<TASK_COMPLETE>。\n` +
-              `- 如果需要继续：请继续分析并在需要时发起tool calls。\n` +
-              `[END INTERNAL NUDGE]\n`;
           }
+
+          if (todo.remaining <= 0) {
+            // Todo list exists but nothing remains: allow plain text to end.
+            injectedSystemPrompt = '';
+            break;
+          }
+
+          // Todo list exists and has remaining work: remind LLM to continue and use tools.
+          // Nudge the LLM internally (do NOT show in chatbot, do NOT store in session history).
+          injectedSystemPrompt =
+            `\n\n[INTERNAL NUDGE]\n` +
+            `你当前有一个todo list，仍有未完成的步骤（Remaining: ${todo.remaining}）。\n` +
+            `**Goal**: ${todo.goal}\n` +
+            `**Items**:\n${todo.list}\n\n` +
+            `请继续完成剩余步骤：必要时发起tool calls，并在完成某一步后调用complete_todo_item。\n` +
+            `当所有步骤完成且任务整体完成后，再调用task_complete（可选带summary）结束。\n` +
+            `[END INTERNAL NUDGE]\n`;
         }
         
         if (iterations >= maxIterations) {

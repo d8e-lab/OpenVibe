@@ -99,6 +99,14 @@ export class ToolExecutor {
           recursive: args.recursive as boolean | undefined,
         });
 
+      case 'task_complete': {
+        const summary = (args['summary'] as string) || '';
+        if (summary.trim()) {
+          this._context.post({ type: 'addMessage', message: { role: 'assistant', content: summary.trim() } });
+        }
+        return JSON.stringify({ success: true, message: 'Task marked complete.' });
+      }
+
       case 'create_todo_list':
         return await this._handleCreateTodoList(args);
 
@@ -317,6 +325,18 @@ ${list}
 
   public clearTodoList(): void {
     this._todoList = null;
+  }
+
+  /**
+   * Lightweight todo state for the main loop to decide whether to keep going.
+   * Returns null when no todo list exists.
+   */
+  public getTodoControlInfo(): { goal: string; list: string; remaining: number } | null {
+    if (!this._todoList) {
+      return null;
+    }
+    const { list, remaining } = this._todoMarkdown(this._todoList.goal, this._todoList.items);
+    return { goal: this._todoList.goal, list, remaining };
   }
 
   private _cloneTodoState(): TodoState | null {

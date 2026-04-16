@@ -143,6 +143,25 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'task_complete',
+      description:
+        'Signal that the current user request is fully completed and the agent should stop. ' +
+        'Call this exactly once when you are done. Optionally include a brief final summary.',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: {
+            type: 'string',
+            description: 'Optional brief final summary to show to the user.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_todo_list',
       description:
         'MUST be called at the start of any multi-step task. ' +
@@ -421,6 +440,7 @@ At runtime, a **Host environment** section is appended to this system message (O
 - **find_in_file** — Locate code by content and return its current line number.
 - **edit** — Edit a line range with new text. A built-in LLM check automatically verifies the change before it is committed (focusing on comparing before/after code sections for semantic consistency).
 - **create_directory** — Create a directory (folder) in the workspace.
+- **task_complete** — Signal that the user request is fully complete and stop.
 - **create_todo_list** — Create a structured task plan before starting multi-step work.
   - **complete_todo_item** — Mark a step as done after verifying it is complete.
   - **compact** — Compact conversation history into a concise summary to reduce context window usage.
@@ -545,8 +565,5 @@ After completing file modifications, output a clear summary:
 3. **Verification** — confirm you read the modified section afterwards
 4. **Next steps** — suggest logical follow-up actions or confirm the task is complete
 
-## Completion signal
-If the task is completed, output exactly:
-<TASK_COMPLETE>
-
-Always include the summary above after completing file edits.`;
+## Completion
+When the task is completed, call the **task_complete** tool exactly once (optionally with a short summary).`;
