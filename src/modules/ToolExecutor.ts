@@ -89,6 +89,7 @@ export class ToolExecutor {
             startLine: args.startLine as number,
             endLine: args.endLine as number,
             newContent: args.newContent as string,
+            raw: args['__mmRaw'] === true,
           },
           (ctx) => this._context.llmCheckReplace(ctx),
           this._context.getApiConfig().confirmChanges !== false ? (ctx) => this._context.userConfirmReplace(ctx) : undefined

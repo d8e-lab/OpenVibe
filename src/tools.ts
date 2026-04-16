@@ -39,9 +39,13 @@ function writeLines(absPath: string, lines: string[], crlf: boolean): void {
   fs.writeFileSync(absPath, lines.join(crlf ? '\r\n' : '\n'), 'utf-8');
 }
 
-/** Normalize model/tool-supplied replacement text: escaped \\n, CRLF, and legacy CR. */
-function splitLinesForEditInput(raw: string): string[] {
-  let t = raw.replace(/\\n/g, '\n');
+/** Normalize model/tool-supplied replacement text: escaped \\n (optional), CRLF, and legacy CR. */
+function splitLinesForEditInput(raw: string, opts?: { decodeEscapedNewlines?: boolean }): string[] {
+  const decode = opts?.decodeEscapedNewlines !== false;
+  let t = raw;
+  if (decode) {
+    t = t.replace(/\\n/g, '\n');
+  }
   t = t.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   if (t === '') {
     return [];
@@ -201,6 +205,8 @@ export interface ReplaceParams {
   startLine: number;
   endLine: number;
   newContent: string;
+  /** Internal: when true, do NOT decode escaped \\n sequences. */
+  raw?: boolean;
 }
 
 /**
@@ -286,7 +292,7 @@ export async function replaceLinesTool(
   const clampedEnd = Math.min(Math.max(params.startLine - 1, params.endLine), total);
 
   const oldLines = lines.slice(params.startLine - 1, clampedEnd);
-  const newLines = splitLinesForEditInput(params.newContent);
+  const newLines = splitLinesForEditInput(params.newContent, { decodeEscapedNewlines: !params.raw });
 
   // If the file already exists and the replacement is byte-for-byte identical at the line level,
   // treat this as a no-op to avoid misleading "diffs" where BEFORE/AFTER are the same.

@@ -4,6 +4,7 @@ import { SYSTEM_PROMPT, TOOL_DEFINITIONS } from '../toolDefinitions';
 import { sendChatMessage } from '../api';
 import { gitSnapshotTool } from '../tools';
 import { AUTO_COMPACT_TOKEN_THRESHOLD, MAX_TOOL_ITERATIONS } from '../constants';
+import { extractFirstMmOutput } from '../mmOutput';
 
 export class MessageHandler {
   private _isRunning = false;
@@ -110,6 +111,9 @@ export class MessageHandler {
 
           // Execute each tool call sequentially
           let taskCompleteRequested = false;
+          // If the model used MM_OUTPUT sentinel blocks in its visible content, we can
+          // safely extract raw payload (avoids JSON string escaping damage for edit/shell).
+          const mm = extractFirstMmOutput(response.content);
           for (const toolCall of response.toolCalls) {
             // Check for stop request before each tool call
             if (this._stopRequested) {
@@ -120,6 +124,25 @@ export class MessageHandler {
              const name = toolCall.function.name;
             let args: Record<string, unknown> = {};
             try { args = JSON.parse(toolCall.function.arguments); } catch { /* keep empty */ }
+
+            // MM_OUTPUT integration (edit + run_shell_command):
+            // If args are missing/empty (or the model intentionally left placeholders),
+            // fill them from the extracted sentinel payload when type matches.
+            if (mm.ok && mm.payload != null) {
+              if (name === 'edit' && mm.type === 'EDIT') {
+                const cur = typeof args['newContent'] === 'string' ? String(args['newContent']) : '';
+                if (!cur) {
+                  args['newContent'] = mm.payload;
+                  // Internal marker to keep literal "\n" intact for MM_PATCH payloads.
+                  args['__mmRaw'] = true;
+                }
+              } else if (name === 'run_shell_command' && mm.type === 'SHELL') {
+                const cur = typeof args['command'] === 'string' ? String(args['command']) : '';
+                if (!cur.trim()) {
+                  args['command'] = mm.payload;
+                }
+              }
+            }
 
             // task_complete 特殊处理：不执行工具调用，直接结束
             if (name === 'task_complete') {

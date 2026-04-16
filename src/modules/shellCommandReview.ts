@@ -1,6 +1,7 @@
 import { getAgentRuntimeContextBlock } from '../agentRuntimeContext';
 import { sendChatMessage } from '../api';
 import type { ApiConfig, ChatMessage } from '../types';
+import { extractFirstMmOutput } from '../mmOutput';
 export interface ShellCommandReviewSettings {
   enabled: boolean;
   maxAttempts: number;
@@ -67,6 +68,15 @@ function parseEditorCommand(content: string | null): { command: string } {
   if (!content?.trim()) {
     throw new Error('Empty model response for shell command JSON');
   }
+  // Allow raw, zero-escape command payload via MM_OUTPUT sentinel protocol.
+  const mm = extractFirstMmOutput(content);
+  if (mm.ok && mm.type === 'SHELL' && mm.payload != null) {
+    const cmd = mm.payload;
+    if (!cmd.trim()) {
+      throw new Error('MM_SHELL payload is empty');
+    }
+    return { command: cmd.trim() };
+  }
   const raw = extractJsonObject(content) as Record<string, unknown>;
   const command = typeof raw.command === 'string' ? raw.command.trim() : '';
   if (!command) {
@@ -88,14 +98,28 @@ const EDITOR_SYSTEM_INITIAL = `You are the shell command editor agent for run_sh
 The main assistant chose a command line; your job is to return exactly ONE shell command to run with workspace root as cwd.
 
 Rules:
-- Output ONLY JSON: {"command":"..."} — one string, no markdown fences.
-- Keep a single logical command line (use && or | within the line if needed; avoid embedding raw newlines).
+- Output format (choose ONE, prefer MM_OUTPUT when multiline is needed):
+  Option A) JSON only: {"command":"..."} — one string, no markdown fences.
+  Option B) MM_OUTPUT only (zero-escape, multiline allowed), and output NOTHING else:
+<MM_OUTPUT type="SHELL">
+<MM_SHELL>
+...raw command/script...
+</MM_SHELL>
+</MM_OUTPUT>
+- If you use MM_OUTPUT, the payload MUST be the raw command text; do not add markdown fences.
 - Prefer conventional tooling (npm, pnpm, git, pytest, cargo, etc.) when appropriate.
 - Do NOT use shell file-editing tricks to change source files (e.g. sed -i, tee, echo >, PowerShell Set-Content/Out-File, vim/nano batch) when ordinary code changes should go through the edit tool — suggest a read-only or build/test command instead, or refuse risky edits by returning a safe alternative that matches the user request.
 - If the proposed command is already appropriate, you may return it unchanged.`;
 
 const EDITOR_SYSTEM_REVISE = `You are revising a shell command after an independent safety review rejected the prior candidate.
-Output ONLY JSON: {"command":"..."} — no markdown fences.
+Output format (choose ONE, prefer MM_OUTPUT when multiline is needed):
+  Option A) JSON only: {"command":"..."} — no markdown fences.
+  Option B) MM_OUTPUT only, output NOTHING else:
+<MM_OUTPUT type="SHELL">
+<MM_SHELL>
+...raw command/script...
+</MM_SHELL>
+</MM_OUTPUT>
 
 Address every reviewer note. Stay aligned with the user's request. Same rules as initial editing: one line, workspace cwd, no source-file bypass via shell where edit tool applies.`;
 

@@ -450,6 +450,33 @@ At runtime, a **Host environment** section is appended to this system message (O
 - **show_notification** — Show an info/warning/error toast to the user.
 - **get_theme_info** — Active color theme id and light/dark/highContrast kind.
 - **run_shell_command** — Run one shell command in the workspace root (build/test/git, etc.). A shell editor agent refines your proposed command, then an independent reviewer checks safety and flags shell-based file edits that should use **edit** instead; after that, the user may confirm. Use carefully.
+
+## MM_OUTPUT raw payload protocol (IMPORTANT for edit + shell)
+To prevent JSON/Markdown/backslash escaping from corrupting raw patch text or multi-line shell scripts, you MAY use this protocol.
+
+When you need to pass raw content for the **edit** tool's \`newContent\`, output ONLY:
+
+<MM_OUTPUT type="EDIT">
+<MM_PATCH>
+...raw replacement text (no escaping; preserve newlines exactly)...
+</MM_PATCH>
+</MM_OUTPUT>
+
+And in the tool call JSON arguments, set \`newContent\` to "" (or omit it). The host will extract the raw payload and use it.
+
+When you need to pass raw content for **run_shell_command** \`command\` (especially multiline), output ONLY:
+
+<MM_OUTPUT type="SHELL">
+<MM_SHELL>
+...raw command/script (no markdown fences)...
+</MM_SHELL>
+</MM_OUTPUT>
+
+And in the tool call JSON arguments, set \`command\` to "" (or omit it). The host will extract the raw payload and use it.
+
+Protocol rules:
+- Output EXACTLY ONE \`<MM_OUTPUT ...>\` block and NOTHING else when using this mode.
+- Do NOT output both EDIT and SHELL blocks in the same message.
 ## Configuration
 You can configure API settings and interaction limits through the config dialog in the chat interface. The configuration includes:
 - **API Base URL**: Endpoint for API calls (default: https://api.deepseek.com)
