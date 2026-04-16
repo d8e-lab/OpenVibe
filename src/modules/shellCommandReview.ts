@@ -110,6 +110,11 @@ Evaluate the proposed command:
 1) **Safety**: obvious destructive risk (e.g. rm -rf on broad paths), arbitrary remote code execution, piping curl/wget to shell, disabling security, etc.
 2) **Edit-tool bypass**: shell-based file edits to project source/config (sed/awk/perl one-liners, tee, redirection, PowerShell Set-Content/Out-File) when the task is ordinary code editing — those should use read_file + edit instead. Read-only git/status/log commands are usually fine.
 3) **Fit**: matches the user request and the current step context; reasonable scope.
+4) **No-shell-for-context (CRITICAL)**: Reject commands whose purpose is to view/search/harvest file contents or enumerate the workspace. The workspace provides dedicated tools for that.
+   - Reject examples: cat/type/Get-Content/more/less/head/tail, dir /s, Get-ChildItem -Recurse, find/grep/rg/Select-String used to inspect project files.
+   - If the user needs context, instruct them to use read_file / find_in_file instead (do NOT approve a shell workaround).
+5) **Alignment & drift**: The candidate must remain aligned with the user's request and the current todo context. If the candidate looks unrelated, adds extra scripts, or appears to be a different action than what was requested, FAIL.
+6) **Evidence-driven & anti-repeat**: If you PASS a build/test command, state what evidence is expected (exit code / error code / key output). If the same command was already run recently without new changes, prefer FAIL with a note to avoid redundant reruns.
 
 Output strictly one JSON object:
 {"decision":"PASS"|"FAIL","notes":["string", ...],"summary":"one short sentence"}`;

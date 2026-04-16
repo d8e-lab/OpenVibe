@@ -150,6 +150,7 @@ export class MessageHandler {
             if (name !== 'compact') {
               this._context.addMessage({ role: 'tool', content: result, tool_call_id: toolCall.id });
             }
+          } // End of for (const toolCall of response.toolCalls)
           // Go back to the top of the loop to continue the conversation
         } else {
           // Text response (no tool calls)

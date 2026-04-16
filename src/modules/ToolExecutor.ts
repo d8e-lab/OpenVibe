@@ -31,6 +31,7 @@ import { reviewShellCommand, shellEditorCandidate } from './shellCommandReview';
 
 export class ToolExecutor {
   private _todoList: { goal: string; items: { text: string; done: boolean }[] } | null = null;
+  private _lastShellExecutions: { command: string; at: number }[] = [];
 
   /** Increments per `edit` LLM check in the current user turn (shown on Replace check cards). */
   private _editReviewRound = 0;
@@ -219,8 +220,23 @@ ${list}
     }
 
     const userRequest = this._context.getLastUserTextForTools();
-    const relatedContext = this._context.getRelatedContextForTodolistReview();
+    const relatedContextBase = this._context.getRelatedContextForTodolistReview();
     const memoryExcerpt = loadMemoryExcerpt();
+
+    const todoInfo = this.getTodoControlInfo();
+    const todoBlock = todoInfo
+      ? `## Todo context\n**Goal**: ${todoInfo.goal}\n\n**Items**:\n${todoInfo.list}\n\n**Remaining**: ${todoInfo.remaining}\n`
+      : `## Todo context\n(none)\n`;
+
+    const recentShell =
+      this._lastShellExecutions.length > 0
+        ? `## Recent shell commands (most recent first)\n${this._lastShellExecutions
+            .slice(0, 5)
+            .map((x, i) => `${i + 1}. ${x.command}`)
+            .join('\n')}\n`
+        : `## Recent shell commands\n(none)\n`;
+
+    const relatedContext = `${relatedContextBase || '(none)'}\n\n${todoBlock}\n${recentShell}`;
 
     let reviewNotes: string[] = [];
     let commandCandidate = proposedFromTool;
@@ -279,12 +295,18 @@ ${list}
           }
         }
         const execResult = await runShellCommandTool({ command: commandCandidate });
+        // Record recent executions to help the reviewer avoid redundant reruns.
+        this._lastShellExecutions.unshift({ command: commandCandidate, at: Date.now() });
+        if (this._lastShellExecutions.length > 20) {
+          this._lastShellExecutions.length = 20;
+        }
         try {
           const parsed = JSON.parse(execResult) as Record<string, unknown>;
           return JSON.stringify({
             ...parsed,
             shellReviewAttempts: attempt,
             reviewedCommand: commandCandidate,
+            originalToolCommand: proposedFromTool,
           });
         } catch {
           return execResult;
