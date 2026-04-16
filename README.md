@@ -32,14 +32,13 @@
 |------|------|
 | 2025-04-11 | 增加 **Git** 支持：编码过程中可自动创建快照，并在 UI 中回滚与管理版本。 |
 | 2025-04-14 | 增加**独立审查**：任务清单审查与代码编辑审查，由独立 LLM 代理提升修改质量。 |
-| 2025-04-16 | **强化 shell 审查与执行**：1) 明确拒绝用 shell 获取项目上下文（强制使用 `read`/`find` 工具） 2) 结构化返回 + 关键错误摘要 3) 注入 todo 与最近执行历史到审查流程 |
-| 2025-04-19 | **新增转义字符处理协议**：引入 `MM_OUTPUT` 特殊标记，允许 `edit` 和 `run_shell_command` 工具直接传递原始文本，避免 JSON/Markdown 转义问题。 |
+| 2025-04-16 | **强化 shell 审查与执行**：1) 严格禁止使用 shell 进行任何文件读写操作（强制使用专用工具） 2) 结构化返回 + 关键错误摘要 3) 注入 todo 与最近执行历史到审查流程 4) 多级审查流程：主智能体→shell 编辑代理→独立安全审查→用户确认 |
 
 > **2025-04-11:** Git snapshots during coding; rollback and history in the UI.  
 
 > **2025-04-14:** Independent review for todo lists and code edits via separate LLM agents.  
 
-> **2025-04-16:** Enhanced shell review & execution: 1) Reject shell for project context (use `read`/`find` instead) 2) Structured output + key error summaries 3) Todo & recent history injection.
+> **2025-04-16:** Enhanced shell review & execution: 1) Strict prohibition on shell file operations (use dedicated tools) 2) Structured output + key error summaries 3) Todo & recent history injection 4) Multi-level review flow: primary agent → shell editor agent → independent security review → user confirmation.
 
 > **2025-04-19:** Raw payload protocol `MM_OUTPUT` for `edit` and `run_shell_command` tools — bypass JSON/Markdown escaping for complex multiline code and shell scripts.
 
@@ -97,22 +96,21 @@ edit(filePath, startLine, endLine, newContent)
 
 - **plan**：主智能体制定 todo → 审查智能体验证计划 → 不通过则反馈并重规划。
 - **edit**：编辑智能体写入 → 审查智能体验证改动 → 不通过则重改；必要时用户确认 diff。
-- **shell 命令**：主智能体提出命令 → 编辑智能体优化 → 审查智能体验证安全性与合理性 → 不通过则重规划 → 最终返回结构化结果
+**Shell 命令审查的强化流程：**
 
-**Shell 命令审查的关键改进：**
+1. **严格的安全规则**：明确禁止使用 shell 命令进行任何文件读写操作（如 cat、type、dir、grep 等），强制使用专用工具 `read_file`/`find_in_file` 获取项目内容
+2. **防止命令漂移**：审查时会检查命令是否与用户请求和当前 todo 上下文保持一致，拒绝无关脚本和执行代码生成等高风险操作
+3. **结构化返回格式**：shell 执行结果包含 `command`、`cwd`、`exitCode`、`durationMs`、`summary`、`keyErrors` 等字段，便于审查抓取关键信息
+4. **多级审查流程**：主智能体提出命令 → shell 编辑代理优化 → 独立安全审查验证 → 用户确认（可选）→ 执行并返回结构化结果
+5. **上下文注入**：自动注入 todo 目标与最近 shell 执行历史到审查流程，确保命令与当前任务一致
+6. **防重复执行**：记录最近执行的命令，避免无意义重复，提升执行效率
 
-1. **强化安全规则**：明确拒绝使用 shell 获取项目上下文（如 cat/type/dir/grep 等），强制使用 `read_file`/`find_in_file` 工具
-2. **防止命令漂移**：要求命令与用户请求和 todo 上下文保持一致，拒绝无关脚本
-3. **结构化返回**：shell 结果包含 command、cwd、exitCode、durationMs、summary、keyErrors 等字段，便于审查抓取关键信息
-4. **上下文注入**：自动注入 todo 目标与最近 shell 历史到审查流程
-5. **防重复执行**：记录最近执行的命令，避免无意义重复
-
-**主智能体**：需求分析、任务与 `plan` / `edit` 协调、与用户沟通。  
+**主智能体**：需求分析、任务与 `plan` / `edit` / `shell` 协调、与用户沟通。  
 **审查智能体**：todo 合理性、编辑正确性与风险、shell 命令安全性。  
-**编辑智能体**：`read_file`、`find_in_file`、`edit`、`run_shell_command` 等具体执行。
+**编辑智能体**：`read_file`、`find_in_file`、`edit`、`run_shell_command` 等具体执行，但**不直接进行文件操作**。
 
 > **Primary agent** plans and coordinates; **editing agent** runs tools; **review agent** independently checks plans and edits. Failed reviews trigger rework loops.  
-> **Shell command improvements**: Strict safety rules, anti-drift enforcement, structured output, context injection, and anti-repeat protection.
+> **Enhanced shell command flow**: Strict safety rules, multi-level review, anti-drift enforcement, structured output, context injection, and anti-repeat protection.
 
 <h2 id="other-available-tools">其它辅助工具 / Other tools</h2>
 
@@ -124,7 +122,7 @@ edit(filePath, startLine, endLine, newContent)
 | `get_workspace_info` | 工作区根目录与顶层文件 |
 | `create_directory` | 创建目录（可递归） |
 | `create_todo_list` | 多步骤任务规划（先计划后执行） |
-| `run_shell_command` | 在项目根执行命令；经 shell 编辑代理优化 + 独立安全审查（含防上下文获取、防漂移、结构化返回）。对于复杂多行命令，可使用 **MM_OUTPUT** 特殊标记传递原始脚本，避免转义问题 |
+| `run_shell_command` | 在项目根执行命令；**禁止使用 shell 进行任何文件读写操作**（强制使用专用工具），经 shell 编辑代理优化 + 独立安全审查（含防上下文获取、防漂移、结构化返回、多级审查流程）。对于复杂多行命令，可使用 **MM_OUTPUT** 特殊标记传递原始脚本，避免转义问题 |
 | `complete_todo_item` | 标记 todo 完成 |
 | `compact` | 压缩长对话，节省上下文 |
 | Git 相关 | 快照与历史管理（见新闻） |
