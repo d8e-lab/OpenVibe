@@ -33,10 +33,11 @@
 | 2025-04-11 | 增加 **Git** 支持：编码过程中可自动创建快照，并在 UI 中回滚与管理版本。 |
 | 2025-04-14 | 增加**独立审查**：任务清单审查与代码编辑审查，由独立 LLM 代理提升修改质量。 |
 | 2025-04-16 | **强化 shell 审查与执行**：1) 明确拒绝用 shell 获取项目上下文（强制使用 `read`/`find` 工具） 2) 结构化返回 + 关键错误摘要 3) 注入 todo 与最近执行历史到审查流程 |
-
+| 2025-04-19 | **新增转义字符处理协议**：引入 `MM_OUTPUT` 特殊标记，允许 `edit` 和 `run_shell_command` 工具直接传递原始文本，避免 JSON/Markdown 转义问题。 |
 > **2025-04-11:** Git snapshots during coding; rollback and history in the UI.  
 > **2025-04-14:** Independent review for todo lists and code edits via separate LLM agents.  
 > **2025-04-16:** Enhanced shell review & execution: 1) Reject shell for project context (use `read`/`find` instead) 2) Structured output + key error summaries 3) Todo & recent history injection.
+> **2025-04-19:** Raw payload protocol `MM_OUTPUT` for `edit` and `run_shell_command` tools — bypass JSON/Markdown escaping for complex multiline code and shell scripts.
 
 <h2 id="project-overview">项目概述 / Project overview</h2>
 
@@ -82,7 +83,7 @@ find_in_file(filePath, searchString, contextBefore, contextAfter)
 edit(filePath, startLine, endLine, newContent)
 ```
 
-替换指定行范围；可选经独立 LLM 审查后再应用。
+替换指定行范围；可选经独立 LLM 审查后再应用。对于多行代码或复杂脚本，可以使用 **MM_OUTPUT raw payload protocol** 避免 JSON/Markdown 转义问题——将 `newContent` 替换为 `<MM_OUTPUT type="EDIT">…</MM_OUTPUT>` 特殊标记即可直接传递原始文本。
 
 <h2 id="multi-agent-architecture">多智能体架构 / Multi-agent architecture</h2>
 
@@ -119,7 +120,7 @@ edit(filePath, startLine, endLine, newContent)
 | `get_workspace_info` | 工作区根目录与顶层文件 |
 | `create_directory` | 创建目录（可递归） |
 | `create_todo_list` | 多步骤任务规划（先计划后执行） |
-| `run_shell_command` | 在项目根执行命令；经 shell 编辑代理优化 + 独立安全审查（含防上下文获取、防漂移、结构化返回） |
+| `run_shell_command` | 在项目根执行命令；经 shell 编辑代理优化 + 独立安全审查（含防上下文获取、防漂移、结构化返回）。对于复杂多行命令，可使用 **MM_OUTPUT** 特殊标记传递原始脚本，避免转义问题 |
 | `complete_todo_item` | 标记 todo 完成 |
 | `compact` | 压缩长对话，节省上下文 |
 | Git 相关 | 快照与历史管理（见新闻） |
