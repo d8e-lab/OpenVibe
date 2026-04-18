@@ -55,15 +55,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       },
       userConfirmReplace: (ctx) => this._uiManager.userConfirmReplace(ctx),
       userConfirmShellCommand: (command) => this._uiManager.userConfirmShellCommand(command),
-      getApiConfig: () => this._uiManager.getApiConfig(),
-      getLastUserTextForTools: () => this._conversation.getLastUserTextForTools(),
-      getRelatedContextForTodolistReview: () => this._conversation.getRelatedContextForTodolistReview(),
-      getTodolistReviewSettings: () => ChatViewProvider._readTodolistReviewSettings(),
-      getShellCommandReviewSettings: () => ChatViewProvider._readShellCommandReviewSettings(),
-      isStopped: () => this._operation.isStopped(),
-      signal: () => this._operation.signal(),
-      log: (e) => this._conversation.addAgentLog(e),
-    });
+       getApiConfig: () => this._uiManager.getApiConfig(),
+       getLastUserTextForTools: () => this._conversation.getLastUserTextForTools(),
+       getRelatedContextForTodolistReview: () => this._conversation.getRelatedContextForTodolistReview(),
+       getTodolistReviewSettings: () => ChatViewProvider._readTodolistReviewSettings(),
+       getShellCommandReviewSettings: () => ChatViewProvider._readShellCommandReviewSettings(),
+       getEditPermissionEnabled: () => this._uiManager.getEditPermissionEnabled(),
+       setEditPermissionEnabled: (enabled: boolean) => this._uiManager.setEditPermissionEnabled(enabled),
+       isStopped: () => this._operation.isStopped(),
+       signal: () => this._operation.signal(),
+       log: (e) => this._conversation.addAgentLog(e),
 
     this._messageHandler = new MessageHandler({
       getApiConfig: () => this._uiManager.getApiConfig(),
@@ -206,12 +207,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await showTextDiffTool({
           title,
           leftContent: typeof msg.leftContent === 'string' ? msg.leftContent : '',
-          rightContent: typeof msg.rightContent === 'string' ? msg.rightContent : '',
-          languageId: typeof msg.languageId === 'string' ? msg.languageId : undefined,
-        });
-      }
-    });
-  }
+           rightContent: typeof msg.rightContent === 'string' ? msg.rightContent : '',
+           languageId: typeof msg.languageId === 'string' ? msg.languageId : undefined,
+         });
+       }
+       if (msg.type === 'setEditPermission') {
+         this._uiManager.setEditPermissionEnabled(!!msg.enabled);
+       }
+     });
+   }
 
   private _replayWebview(): void {
     this._conversation.replaySessionToWebview((m) => this._uiManager.post(m));
@@ -539,6 +543,48 @@ Uncommitted changes will be lost.`,
   #stop { background: var(--vscode-errorForeground, #be1100); }
   #stop:hover { background: var(--vscode-errorForeground, #d52222); }
 
+  /* Edit permission toggle */
+  .edit-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    flex-shrink: 0;
+    opacity: 0.7;
+    transition: opacity 0.15s, border-color 0.15s;
+    margin-right: 4px;
+  }
+  .edit-toggle:hover {
+    opacity: 1;
+    border-color: var(--vscode-input-border, #555);
+    background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,0.1));
+  }
+  .edit-toggle.on {
+    opacity: 1;
+    border-color: var(--vscode-testing-runAction, #388a34);
+    background: rgba(56, 138, 52, 0.1);
+  }
+  .edit-toggle.off {
+    opacity: 0.7;
+  }
+  .toggle-icon {
+    font-size: 14px;
+  }
+  .toggle-text {
+    font-size: 11px;
+     white-space: nowrap;
+   }
+   .edit-toggle-group {
+     display: flex;
+     align-items: center;
+     gap: 4px;
+   }
   .loading { font-size: 12px; font-style: italic; color: var(--vscode-descriptionForeground); padding: 2px 4px; }
   .error-msg {
     font-size: 12px; color: var(--vscode-errorForeground);
@@ -703,11 +749,17 @@ Uncommitted changes will be lost.`,
       </div>
       <div id="confirm-meta" class="confirm-meta"></div>
     </div>
-    <div class="input-area">
-      <textarea id="input" rows="3" placeholder="Describe what you want to change…"></textarea>
-      <button id="send" class="chat-button" title="Send message">▶</button>
-      <button id="stop" class="chat-button" title="Stop current operation" disabled>■</button>
-    </div>
+     <div class="input-area">
+       <textarea id="input" rows="3" placeholder="Describe what you want to change…"></textarea>
+       <div class="edit-toggle-group">
+         <button id="edit-toggle" class="edit-toggle on" title="Toggle edit permission - ON: LLM can use edit tools, OFF: read-only mode">
+           <span class="toggle-icon">🔓</span>
+           <span class="toggle-text">Edit ON</span>
+         </button>
+         <button id="send" class="chat-button" title="Send message">▶</button>
+       </div>
+       <button id="stop" class="chat-button" title="Stop current operation" disabled>■</button>
+     </div>
   </div>
 
 <script src="${scriptUri}"></script>

@@ -27,18 +27,18 @@
     safePost({ type: 'webviewError', message: reason });
   });
 
-  var messagesDiv = byId('messages');
-  var input = byId('input');
-  var sendBtn = byId('send');
-  var stopBtn = byId('stop');
-  var clearBtn = byId('clear');
-  var snapshotsBtn = byId('snapshots');
-  var confirmBar = byId('replace-confirm');
-  var confirmMeta = byId('confirm-meta');
-  var confirmApplyBtn = byId('confirm-apply');
-  var confirmCancelBtn = byId('confirm-cancel');
-  var confirmTitleEl = qs('#replace-confirm .confirm-title');
-
+   var messagesDiv = byId('messages');
+   var input = byId('input');
+   var sendBtn = byId('send');
+   var stopBtn = byId('stop');
+   var clearBtn = byId('clear');
+   var snapshotsBtn = byId('snapshots');
+   var editToggleBtn = byId('edit-toggle');
+   var confirmBar = byId('replace-confirm');
+   var confirmMeta = byId('confirm-meta');
+   var confirmApplyBtn = byId('confirm-apply');
+   var confirmCancelBtn = byId('confirm-cancel');
+   var confirmTitleEl = qs('#replace-confirm .confirm-title');
   var TOOL_ICONS = {
     read_file: '📄',
     find_in_file: '🔍',
@@ -47,9 +47,11 @@
     get_workspace_info: '📂',
   };
 
-  var pendingToolCard = null;
-  var pendingConfirm = null; // { requestId, ... }
-
+   var pendingToolCard = null;
+   var pendingConfirm = null; // { requestId, ... }
+   
+   // Edit permission state
+   var editPermissionEnabled = true;
   function scrollBottom() {
     if (!messagesDiv) return;
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -57,8 +59,41 @@
   function escHtml(str) {
     if (str === null || str === undefined) { return ''; }
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
+   }
+   
+   // Edit permission toggle function
+   function toggleEditPermission() {
+     if (!editToggleBtn) return;
+     
+     editPermissionEnabled = !editPermissionEnabled;
+     
+     // Update UI
+     if (editPermissionEnabled) {
+       editToggleBtn.classList.remove('off');
+       editToggleBtn.classList.add('on');
+       editToggleBtn.title = 'Toggle edit permission - ON: LLM can use edit tools, OFF: read-only mode';
+       var iconSpan = editToggleBtn.querySelector('.toggle-icon');
+       var textSpan = editToggleBtn.querySelector('.toggle-text');
+       if (iconSpan) iconSpan.textContent = '🔓';
+       if (textSpan) textSpan.textContent = 'Edit ON';
+     } else {
+       editToggleBtn.classList.remove('on');
+       editToggleBtn.classList.add('off');
+       editToggleBtn.title = 'Toggle edit permission - ON: LLM can use edit tools, OFF: read-only mode';
+       var iconSpan = editToggleBtn.querySelector('.toggle-icon');
+       var textSpan = editToggleBtn.querySelector('.toggle-text');
+       if (iconSpan) iconSpan.textContent = '🔒';
+       if (textSpan) textSpan.textContent = 'Edit OFF';
+     }
+     
+     // Notify backend
+     safePost({ 
+       type: 'setEditPermission', 
+       enabled: editPermissionEnabled 
+     });
+   }
 
+   // Simple markdown parser for basic formatting
   // Simple markdown parser for basic formatting
   function parseMarkdown(text) {
     if (!text || typeof text !== 'string') return '';
@@ -479,8 +514,8 @@
   });
   if (stopBtn) stopBtn.addEventListener('click', function () { safePost({ type: 'stopOperation' }); });
   if (clearBtn) clearBtn.addEventListener('click', function () { safePost({ type: 'clearHistory' }); });
-  if (snapshotsBtn) snapshotsBtn.addEventListener('click', function () { safePost({ type: 'showSnapshots' }); });
-
+   if (snapshotsBtn) snapshotsBtn.addEventListener('click', function () { safePost({ type: 'showSnapshots' }); });
+   if (editToggleBtn) editToggleBtn.addEventListener('click', toggleEditPermission);
   if (input) {
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (sendBtn) sendBtn.click(); }

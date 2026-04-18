@@ -56,30 +56,39 @@ export class UIManager {
   private _view?: vscode.WebviewView;
   private _outputChannel?: vscode.OutputChannel;
   private _abortController: AbortController = new AbortController();
-  private _pendingReplaceConfirms: Map<string, (approved: boolean) => void> = new Map();
-  private _pendingShellConfirms: Map<string, (approved: boolean) => void> = new Map();
+   private _pendingReplaceConfirms: Map<string, (approved: boolean) => void> = new Map();
+   private _pendingShellConfirms: Map<string, (approved: boolean) => void> = new Map();
+   private _editPermissionEnabled: boolean = true;
 
-  constructor(private readonly _context: vscode.ExtensionContext) {}
+   constructor(private readonly _context: vscode.ExtensionContext) {}
 
-  public setView(view: vscode.WebviewView | undefined): void {
-    this._view = view;
-  }
+   public setView(view: vscode.WebviewView | undefined): void {
+     this._view = view;
+   }
 
-  public setOutputChannel(channel: vscode.OutputChannel): void {
-    this._outputChannel = channel;
-  }
+   public setOutputChannel(channel: vscode.OutputChannel): void {
+     this._outputChannel = channel;
+   }
 
-  public post(message: any): void {
-    this._view?.webview.postMessage(message);
-  }
+   public post(message: any): void {
+     this._view?.webview.postMessage(message);
+   }
 
-  public sendWorkspaceBanner(): void {
-    const workspace = vscode.workspace.workspaceFolders?.[0];
-    const name = workspace?.name || 'No workspace open';
-    const path = workspace?.uri.fsPath || '';
-    const text = `Workspace: ${name} (${path})`;
-    this.post({ type: 'addMessage', message: { role: 'system', content: text } });
-  }
+   public getEditPermissionEnabled(): boolean {
+     return this._editPermissionEnabled;
+   }
+
+   public setEditPermissionEnabled(enabled: boolean): void {
+     this._editPermissionEnabled = enabled;
+   }
+
+   public sendWorkspaceBanner(): void {
+     const workspace = vscode.workspace.workspaceFolders?.[0];
+     const name = workspace?.name || 'No workspace open';
+     const path = workspace?.uri.fsPath || '';
+     const text = `Workspace: ${name} (${path})`;
+     this.post({ type: 'addMessage', message: { role: 'system', content: text } });
+   }
 
   public getApiConfig(): ApiConfig {
     const cfg = vscode.workspace.getConfiguration('vibe-coding');

@@ -144,29 +144,31 @@ export class ToolExecutor {
   private _todoList: { goal: string; items: { text: string; done: boolean }[] } | null = null;
   private _lastShellExecutions: { command: string; at: number }[] = [];
 
+  /** Edit permission state - controls whether edit tools can be used */
+  private _editPermissionEnabled: boolean = true;
+
   /** Increments per `edit` LLM check in the current user turn (shown on Replace check cards). */
   private _editReviewRound = 0;
-
-  constructor(
-    private readonly _context: {
-      post: (message: any) => void;
-      llmCheckReplace: (ctx: ReplaceCheckContext) => Promise<ReplaceCheckResult>;
-      userConfirmReplace: (ctx: ReplaceCheckContext) => Promise<boolean>;
-      userConfirmShellCommand: (command: string) => Promise<boolean>;
-      getApiConfig: () => ApiConfig;
-      getLastUserTextForTools: () => string;
-      getRelatedContextForTodolistReview: () => string;
-      getTodolistReviewSettings: () => TodolistReviewSettings;
-      getShellCommandReviewSettings: () => ShellCommandReviewSettings;
-      isStopped?: () => boolean;
-      signal?: () => AbortSignal;
-      log?: (entry: AgentLogEntry) => void;
-    }
-  ) {}
-
-  private _stopped(): boolean {
-    try {
-      return this._context.isStopped?.() === true;
+   constructor(
+     private readonly _context: {
+       post: (message: any) => void;
+       llmCheckReplace: (ctx: ReplaceCheckContext) => Promise<ReplaceCheckResult>;
+       userConfirmReplace: (ctx: ReplaceCheckContext) => Promise<boolean>;
+       userConfirmShellCommand: (command: string) => Promise<boolean>;
+       getApiConfig: () => ApiConfig;
+       getLastUserTextForTools: () => string;
+       getRelatedContextForTodolistReview: () => string;
+       getTodolistReviewSettings: () => TodolistReviewSettings;
+       getShellCommandReviewSettings: () => ShellCommandReviewSettings;
+       /** Check if edit permission is enabled */
+       getEditPermissionEnabled: () => boolean;
+       /** Update edit permission state */
+       setEditPermissionEnabled: (enabled: boolean) => void;
+       isStopped?: () => boolean;
+       signal?: () => AbortSignal;
+       log?: (entry: AgentLogEntry) => void;
+     }
+   ) {}
     } catch {
       return false;
     }
@@ -199,8 +201,16 @@ export class ToolExecutor {
     return this._editReviewRound;
   }
 
-  public async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
-    switch (name) {
+   public async executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+     // Check if the tool requires edit permission
+     const editTools = ['edit', 'create_directory'];
+     if (editTools.includes(name) && !this._context.getEditPermissionEnabled()) {
+       const message = `Edit permission is currently disabled. The ${name} tool cannot be used while edit permission is turned off. Please enable edit permission or use read-only tools only.`;
+       this._context.post({ type: 'addMessage', message: { role: 'assistant', content: message } });
+       return JSON.stringify({ error: message });
+     }
+     
+     switch (name) {
       case 'get_workspace_info':
         return getWorkspaceInfoTool();
 
