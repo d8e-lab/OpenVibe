@@ -44,13 +44,20 @@ function splitLinesForEditInput(raw: string, opts?: { decodeEscapedNewlines?: bo
   const decode = opts?.decodeEscapedNewlines !== false;
   let t = raw;
   if (decode) {
-    t = t.replace(/\\n/g, '\n');
+    t = t.replace(/\\\\n/g, '\\n');
   }
-  t = t.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (decode) {
+    // When decoding escaped newlines, normalize all line endings to \n
+    t = t.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+  }
   if (t === '') {
     return [];
   }
-  return t.split('\n');
+  if (!decode) {
+    // When not decoding (raw mode for MM_OUTPUT), split by any line ending but don't normalize
+    return t.split(/\\r\\n|\\r|\\n/);
+  }
+  return t.split('\\n');
 }
 
 function splitLinesNormalized(raw: string): string[] {

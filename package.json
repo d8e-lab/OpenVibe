@@ -148,7 +148,9 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "cli": "npm run compile && node out/cli/cli.js",
+    "cli:run": "node out/cli/cli.js"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",

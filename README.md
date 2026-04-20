@@ -139,6 +139,146 @@ edit(filePath, startLine, endLine, newContent)
 
 > **Requirements:** Node.js (LTS recommended), VS Code **≥ 1.74**. Clone → `npm install` → `npm run compile` → open in VS Code → **F5** to run the extension host → use the **Vibe Coding** sidebar chat.
 
+<h2 id="cli-preview">CLI 预览 / CLI preview</h2>
+
+项目已提供统一 CLI 入口，可用于会话历史查看与继续对话：
+
+1. 设置环境变量：
+   - `OPENVIBE_API_KEY`（必填）
+   - `OPENVIBE_API_BASE_URL`（可选，默认 `https://api.deepseek.com`）
+   - `OPENVIBE_MODEL`（可选，默认 `deepseek-reasoner`）
+2. 启动：
+   - `npm run cli`（编译并运行统一 CLI）
+   - 或 `npm run cli:run`（运行已编译产物）
+3. 会话命令：
+   - `npm run cli -- list`
+   - `npm run cli -- show <id|index>`
+   - `npm run cli -- search <query>`
+   - `npm run cli -- stats`
+   - `npm run cli -- export <id> [--text]`
+4. 聊天命令：
+   - `npm run cli -- chat`（继续当前活跃会话）
+   - `npm run cli -- chat <id|index>`（恢复指定会话继续聊天）
+   - `npm run cli -- chat --new`（新建会话后聊天）
+5. chat 模式内命令：
+   - `/help`
+   - `/reset-context`
+   - `/exit`
+
+> 终端 chat 模式包含灰色填充的用户输入块。当前实现已支持会话恢复与持久化回复。
+
+## CLI 工具扩展计划
+
+当前 CLI 提供了会话管理和基础聊天功能，**即将支持工具调用**，使 CLI 能够像 VS Code 扩展一样读取和操作项目文件。
+
+### 🚧 第一阶段：read_file 工具集成（进行中）
+
+**目标**：为 CLI 添加文件读取功能，支持两种使用方式：
+
+1. **直接命令**：`npm run cli -- read src/index.ts [--lines 1-10]`
+2. **Chat 模式内**：AI 助手可调用 `read_file` 工具
+
+**实现策略**：
+- **最小代码重复**：复用 `src/tools.ts` 中 90% 的核心逻辑
+- **平台适配**：CLI 使用 `process.cwd()` 作为工作区根目录
+- **统一接口**：保持与 VS Code 扩展相同的 JSON 返回格式
+- **美观输出**：设计树形结构的 CLI 显示格式
+
+**技术挑战与解决方案**：
+1. **工作区根目录获取**：
+   - VS Code：`vscode.workspace.workspaceFolders`
+   - CLI：`process.cwd()`（当前目录）
+   - 方案：创建平台适配器或参数化现有函数
+
+2. **代码复用架构**：
+   ```
+   共享核心逻辑（平台无关）       平台特定层
+   ┌─────────────────────┐    ┌──────────────┐
+   │ 文件I/O、行号计算   │ ←→ │ 工作区适配器 │
+   │ 错误处理、JSON格式  │    │ UI通信适配器 │
+   └─────────────────────┘    └──────────────┘
+          ↑                          ↑
+     VS Code工具              CLI工具实现
+   ```
+
+3. **输出格式化**：
+   - 单文件：带边框和行号的精美显示
+   - 多文件：树形结构汇总
+
+### 📋 第二阶段：完整工具支持
+
+**目标**：为 CLI 实现所有核心工具，创建完整的 CLI ToolExecutor
+
+**计划包含的工具**：
+- `read_file` - 文件读取 ✓（第一阶段）
+- `find_in_file` - 代码搜索
+- `get_workspace_info` - 工作区信息
+- `get_file_info` - 文件元数据
+- `get_diagnostics` - 代码诊断（简化版）
+
+**架构设计**：
+- 创建 `CliToolExecutor` 类，实现与 VS Code 相同的工具接口
+- 集成到现有的 chat 模式中
+- 支持工具调用审查流程（简化版）
+
+### 🎯 长期目标：代码抽象与重构
+
+**问题**：避免工具逻辑的重复维护
+**解决方案**：三层架构重构
+
+1. **核心层（Core）**：平台无关的文件操作、行号计算、错误处理
+2. **适配器层（Adapter）**：
+   - `VSCodeAdapter`：使用 VS Code API
+   - `CliAdapter`：使用 Node.js/process API
+3. **工具层（Tools）**：统一的工具接口，通过适配器访问平台功能
+
+**好处**：
+- ✅ 单点维护核心逻辑
+- ✅ 平台特定代码隔离
+- ✅ 易于测试和扩展
+- ✅ 未来支持更多平台（Web、桌面应用等）
+
+### 🔧 当前进展
+
+已完成的分析和设计：
+- [x] 详细分析了现有 `tools.ts` 的架构
+- [x] 确定了 90% 代码可复用（文件I/O、行号计算、错误处理）
+- [x] 识别了唯一的平台绑定点：`getWorkspaceRoot()`
+- [x] 设计了 CLI 美观输出格式
+- [x] 规划了最小改动的集成策略
+
+待实现的代码：
+- [ ] 修复 CLI 工具模块中的语法问题
+- [ ] 添加 `read` 命令到 `cli.ts`
+- [ ] 实现 CLI 输出格式化
+- [ ] 集成到 chat 模式的工具调用
+- [ ] 编写测试和示例
+
+### 🧪 测试计划
+
+**单元测试**：
+- CLI 工作区解析器
+- 文件读取边界情况
+- 行号范围解析
+
+**集成测试**：
+- 直接命令：`npm run cli -- read README.md`
+- Chat 模式：AI 调用 `read_file` 工具
+- 错误处理：不存在的文件、越界行号
+
+**示例使用场景**：
+```bash
+# 单文件读取
+npm run cli -- read src/tools.ts
+
+# 指定行号范围
+npm run cli -- read src/index.ts --lines 1-20
+
+# Chat 模式中使用工具
+npm run cli -- chat
+# 然后在聊天中输入："请帮我查看 package.json 的内容"
+```
+
 <h2 id="configuration">配置 / Configuration</h2>
 
 在 VS Code **设置**中搜索 `vibe-coding` 即可。下列键名与 `package.json` 中 `contributes.configuration` 一致。
